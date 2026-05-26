@@ -12,12 +12,24 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  Image,
+  PermissionsAndroid,
+  Linking,
 } from 'react-native';
+import {
+  launchCamera,
+  launchImageLibrary,
+  type Asset,
+} from 'react-native-image-picker';
 import { createPlot } from '@/data/plots';
+import { uploadPlotImages } from '@/lib/uploadImage';
+import { supabase } from '@/lib/supabase';
 import type { LatLng } from '@/lib/geometry';
 import { fmtArea, geodesicArea } from '@/lib/geometry';
 import { colors, radii, spacing } from '@/lib/theme';
 import { t, type Lang } from '@/lib/i18n';
+
+const MAX_PHOTOS = 5;
 
 type Props = {
   visible: boolean;
@@ -67,8 +79,107 @@ export default function CreatePlotForm({
   const [road, setRoad] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const [photos, setPhotos] = useState<Asset[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
   const area = geodesicArea(coords);
+
+  const remaining = MAX_PHOTOS - photos.length;
+
+  const requestCameraPermission = async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') return true;
+    try {
+      const has = await PermissionsAndroid.check(
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+      );
+      if (has) return true;
+
+      const result = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        {
+          title: t(lang, 'app_title'),
+          message: t(lang, 'add_photos_hint'),
+          buttonPositive: t(lang, 'apply'),
+          buttonNegative: t(lang, 'cancel'),
+        },
+      );
+
+      if (result === PermissionsAndroid.RESULTS.GRANTED) return true;
+
+      if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+        // User permanently denied; guide them to Settings
+        Alert.alert(
+          t(lang, 'app_title'),
+          t(lang, 'add_photos_hint'),
+          [
+            { text: t(lang, 'cancel'), style: 'cancel' },
+            {
+              text: t(lang, 'apply'),
+              onPress: () => Linking.openSettings(),
+            },
+          ],
+        );
+      }
+      return false;
+    } catch (e) {
+      console.warn('camera permission error:', e);
+      return false;
+    }
+  };
+
+  const addFromCamera = async () => {
+    if (remaining <= 0) {
+      Alert.alert(t(lang, 'app_title'), t(lang, 'max_photos'));
+      return;
+    }
+    const granted = await requestCameraPermission();
+    if (!granted) return;
+
+    try {
+      const result = await launchCamera({
+        mediaType: 'photo',
+        quality: 0.7,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        saveToPhotos: false,
+        cameraType: 'back',
+      });
+      if (result.didCancel) return;
+      if (result.errorCode) {
+        Alert.alert(
+          t(lang, 'app_title'),
+          result.errorMessage ?? result.errorCode,
+        );
+        return;
+      }
+      if (!result.assets) return;
+      const valid = result.assets.filter(a => !!a.uri);
+      setPhotos(prev => [...prev, ...valid].slice(0, MAX_PHOTOS));
+    } catch (e: any) {
+      Alert.alert(t(lang, 'app_title'), e?.message ?? String(e));
+    }
+  };
+
+  const addFromGallery = async () => {
+    if (remaining <= 0) {
+      Alert.alert(t(lang, 'app_title'), t(lang, 'max_photos'));
+      return;
+    }
+    const result = await launchImageLibrary({
+      mediaType: 'photo',
+      quality: 0.7,
+      maxWidth: 1600,
+      maxHeight: 1600,
+      selectionLimit: remaining,
+    });
+    if (result.didCancel || !result.assets) return;
+    const valid = result.assets.filter(a => !!a.uri);
+    setPhotos(prev => [...prev, ...valid].slice(0, MAX_PHOTOS));
+  };
+
+  const removePhoto = (idx: number) => {
+    setPhotos(prev => prev.filter((_, i) => i !== idx));
+  };
 
   const submit = async () => {
     const priceNum = Number(price);
@@ -77,6 +188,28 @@ export default function CreatePlotForm({
       return;
     }
     setSaving(true);
+
+    // Upload photos first (if any) so URLs can be saved with the plot
+    let imageUrls: string[] = [];
+    if (photos.length > 0) {
+      setUploadingPhotos(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setSaving(false);
+        setUploadingPhotos(false);
+        Alert.alert(t(lang, 'app_title'), t(lang, 'must_signin'));
+        return;
+      }
+      const uris = photos.map(p => p.uri!).filter(Boolean);
+      imageUrls = await uploadPlotImages(uris, user.id);
+      setUploadingPhotos(false);
+
+      if (imageUrls.length < uris.length) {
+        // Some failed -- let the user know but still proceed
+        Alert.alert(t(lang, 'app_title'), t(lang, 'upload_failed'));
+      }
+    }
+
     const result = await createPlot({
       coords,
       district,
@@ -90,6 +223,7 @@ export default function CreatePlotForm({
       water,
       water_source: water ? (waterSource || '') : '',
       road,
+      images: imageUrls,
     });
     setSaving(false);
 
@@ -176,6 +310,55 @@ export default function CreatePlotForm({
             />
           </Field>
 
+          <Field label={`${t(lang, 'add_photos')} (${photos.length}/${MAX_PHOTOS})`}>
+            <Text style={s.photoHint}>{t(lang, 'add_photos_hint')}</Text>
+            {photos.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={s.photoStrip}
+              >
+                {photos.map((p, idx) => (
+                  <View key={`${p.uri}-${idx}`} style={s.photoThumb}>
+                    <Image source={{ uri: p.uri }} style={s.photoThumbImg} />
+                    <Pressable
+                      style={s.photoRemove}
+                      onPress={() => removePhoto(idx)}
+                      hitSlop={8}
+                    >
+                      <Text style={s.photoRemoveText}>✕</Text>
+                    </Pressable>
+                    {idx === 0 && (
+                      <View style={s.photoCover}>
+                        <Text style={s.photoCoverText}>1</Text>
+                      </View>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+            {remaining > 0 && (
+              <View style={s.photoBtns}>
+                <TouchableOpacity
+                  style={s.photoBtn}
+                  onPress={addFromCamera}
+                  disabled={uploadingPhotos}
+                >
+                  <Text style={s.photoBtnIcon}>📷</Text>
+                  <Text style={s.photoBtnText}>{t(lang, 'take_photo')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={s.photoBtn}
+                  onPress={addFromGallery}
+                  disabled={uploadingPhotos}
+                >
+                  <Text style={s.photoBtnIcon}>🖼</Text>
+                  <Text style={s.photoBtnText}>{t(lang, 'choose_gallery')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </Field>
+
           <Pressable
             onPress={() => setShowMore(v => !v)}
             style={s.moreToggle}
@@ -258,10 +441,18 @@ export default function CreatePlotForm({
 
         <View style={s.footer}>
           <TouchableOpacity style={s.cta} onPress={submit} disabled={saving}>
-            {saving
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={s.ctaText}>{t(lang, 'save')}</Text>
-            }
+            {saving ? (
+              <View style={s.savingRow}>
+                <ActivityIndicator color="#fff" />
+                <Text style={s.ctaText}>
+                  {uploadingPhotos
+                    ? t(lang, 'uploading_photos')
+                    : t(lang, 'saving')}
+                </Text>
+              </View>
+            ) : (
+              <Text style={s.ctaText}>{t(lang, 'save')}</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -451,4 +642,66 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   ctaText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  savingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+
+  // Photos
+  photoHint: { color: colors.muted, fontSize: 12, marginBottom: 4 },
+  photoStrip: { gap: 8, paddingVertical: 4 },
+  photoThumb: {
+    width: 92,
+    height: 92,
+    borderRadius: radii.md,
+    overflow: 'hidden',
+    backgroundColor: colors.panel,
+    borderWidth: 1,
+    borderColor: colors.border,
+    position: 'relative',
+  },
+  photoThumbImg: { width: '100%', height: '100%' },
+  photoRemove: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: 'rgba(12,17,16,0.85)',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoRemoveText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  photoCover: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: colors.brand,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  photoCoverText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  photoBtns: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: 4,
+  },
+  photoBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderRadius: radii.md,
+    paddingVertical: 14,
+  },
+  photoBtnIcon: { fontSize: 18 },
+  photoBtnText: { color: colors.text, fontSize: 13, fontWeight: '600' },
 });

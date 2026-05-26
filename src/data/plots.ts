@@ -23,6 +23,8 @@ export type Plot = {
   admin_note?: string | null;
   view_count?: number;
   created_at?: string;
+  // Seller verification (joined from profiles table)
+  owner_verified?: boolean;
 };
 
 const COLS =
@@ -50,7 +52,28 @@ const rowToPlot = (r: any): Plot => ({
   admin_note: r.admin_note,
   view_count: r.view_count ?? 0,
   created_at: r.created_at,
+  owner_verified: false, // populated in attachVerification
 });
+
+// Fetch the verification status for a set of owner ids and attach it to plots.
+async function attachVerification(plots: Plot[]): Promise<Plot[]> {
+  const ownerIds = Array.from(
+    new Set(plots.map(p => p.owner_id).filter((x): x is string => !!x)),
+  );
+  if (ownerIds.length === 0) return plots;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id,is_verified')
+    .in('id', ownerIds);
+  if (error || !data) return plots;
+  const verifiedSet = new Set(
+    data.filter((p: any) => p.is_verified).map((p: any) => p.id as string),
+  );
+  return plots.map(p => ({
+    ...p,
+    owner_verified: p.owner_id ? verifiedSet.has(p.owner_id) : false,
+  }));
+}
 
 export async function fetchActivePlots(): Promise<Plot[]> {
   const { data, error } = await supabase
@@ -62,7 +85,98 @@ export async function fetchActivePlots(): Promise<Plot[]> {
     console.warn('fetchActivePlots:', error.message);
     return [];
   }
-  return (data ?? []).map(rowToPlot);
+  const plots = (data ?? []).map(rowToPlot);
+  return attachVerification(plots);
+}
+
+// Fetch the current user's profile (verification status, etc.)
+export type Profile = {
+  id: string;
+  is_verified: boolean;
+  verified_at: string | null;
+  full_name: string | null;
+  phone: string | null;
+};
+
+export async function fetchMyProfile(): Promise<Profile | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id,is_verified,verified_at,full_name,phone')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    id: data.id,
+    is_verified: !!data.is_verified,
+    verified_at: data.verified_at ?? null,
+    full_name: data.full_name ?? null,
+    phone: data.phone ?? null,
+  };
+}
+
+// Market statistics for the investment calculator
+export type MarketStats = {
+  count: number;          // number of comparable plots
+  avgPricePerM2: number;  // average price per m² (in plot's currency)
+  minPricePerM2: number;
+  maxPricePerM2: number;
+  currency: string;       // most common currency among samples
+};
+
+/**
+ * Compute market stats for comparable plots in the same district + use.
+ * Used as the "market average" for the investment calculator.
+ * Returns null when there are fewer than 2 comparable plots (not enough data).
+ */
+export async function fetchMarketStats(
+  district: string,
+  use: string,
+): Promise<MarketStats | null> {
+  const { data, error } = await supabase
+    .from('plots')
+    .select('price,currency,area_m2,status')
+    .eq('district', district)
+    .eq('use', use)
+    .in('status', ['active', 'sold']);
+  if (error || !data) {
+    console.warn('fetchMarketStats:', error?.message);
+    return null;
+  }
+
+  // Compute price per m² for each row that has a valid area
+  const samples = data
+    .map((r: any) => {
+      const area = Number(r.area_m2);
+      const price = Number(r.price);
+      if (!Number.isFinite(area) || area <= 0) return null;
+      if (!Number.isFinite(price) || price <= 0) return null;
+      return { ppm2: price / area, currency: String(r.currency || 'USD') };
+    })
+    .filter((x): x is { ppm2: number; currency: string } => !!x);
+
+  if (samples.length < 2) return null;
+
+  // Pick most common currency
+  const currCount = new Map<string, number>();
+  samples.forEach(s =>
+    currCount.set(s.currency, (currCount.get(s.currency) ?? 0) + 1),
+  );
+  const currency = [...currCount.entries()].sort((a, b) => b[1] - a[1])[0][0];
+
+  // Filter to that currency only so we don't mix USD with SYP
+  const sameCurrency = samples.filter(s => s.currency === currency);
+  const prices = sameCurrency.map(s => s.ppm2);
+
+  const sum = prices.reduce((a, b) => a + b, 0);
+  return {
+    count: sameCurrency.length,
+    avgPricePerM2: sum / prices.length,
+    minPricePerM2: Math.min(...prices),
+    maxPricePerM2: Math.max(...prices),
+    currency,
+  };
 }
 
 export async function fetchMyPlots(): Promise<Plot[]> {
