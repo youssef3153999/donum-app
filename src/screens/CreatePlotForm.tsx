@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Modal,
   View,
@@ -21,7 +21,7 @@ import {
   launchImageLibrary,
   type Asset,
 } from 'react-native-image-picker';
-import { createPlot } from '@/data/plots';
+import { createPlot, updatePlot, type Plot } from '@/data/plots';
 import { uploadPlotImages } from '@/lib/uploadImage';
 import { supabase } from '@/lib/supabase';
 import type { LatLng } from '@/lib/geometry';
@@ -35,6 +35,12 @@ type Props = {
   visible: boolean;
   coords: LatLng[];
   lang: Lang;
+  /**
+   * If provided, the form is in EDIT mode: it pre-fills with the plot's
+   * existing values and calls updatePlot on save. The coords prop is
+   * ignored in edit mode (we use existingPlot.coords instead).
+   */
+  existingPlot?: Plot | null;
   onClose: () => void;
   onSaved: () => void;
 };
@@ -64,25 +70,56 @@ export default function CreatePlotForm({
   visible,
   coords,
   lang,
+  existingPlot,
   onClose,
   onSaved,
 }: Props) {
-  const [district, setDistrict] = useState('damascus');
-  const [use, setUse] = useState('residential');
-  const [price, setPrice] = useState('');
-  const [currency, setCurrency] = useState('USD');
-  const [phone, setPhone] = useState('');
-  const [description, setDescription] = useState('');
-  const [electricity, setElectricity] = useState(false);
-  const [water, setWater] = useState(false);
+  const isEdit = !!existingPlot;
+  const effectiveCoords = isEdit ? existingPlot!.coords : coords;
+
+  const [district, setDistrict] = useState(
+    existingPlot?.district ?? 'damascus',
+  );
+  const [use, setUse] = useState(existingPlot?.use ?? 'residential');
+  const [price, setPrice] = useState(
+    existingPlot ? String(existingPlot.price) : '',
+  );
+  const [currency, setCurrency] = useState(existingPlot?.currency ?? 'USD');
+  const [phone, setPhone] = useState(existingPlot?.phone ?? '');
+  const [description, setDescription] = useState(
+    existingPlot?.desc?.[lang] ?? existingPlot?.desc?.ar ?? '',
+  );
+  const [electricity, setElectricity] = useState(
+    !!existingPlot?.electricity,
+  );
+  const [water, setWater] = useState(!!existingPlot?.water);
   const [waterSource, setWaterSource] = useState<'city' | 'well' | ''>('');
-  const [road, setRoad] = useState(false);
+  const [road, setRoad] = useState(!!existingPlot?.road);
   const [saving, setSaving] = useState(false);
-  const [showMore, setShowMore] = useState(false);
+  const [showMore, setShowMore] = useState(isEdit); // expand by default in edit
   const [photos, setPhotos] = useState<Asset[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
-  const area = geodesicArea(coords);
+  // Re-sync state when opening with a different plot
+  useEffect(() => {
+    if (visible && existingPlot) {
+      setDistrict(existingPlot.district);
+      setUse(existingPlot.use);
+      setPrice(String(existingPlot.price));
+      setCurrency(existingPlot.currency);
+      setPhone(existingPlot.phone ?? '');
+      setDescription(
+        existingPlot.desc?.[lang] ?? existingPlot.desc?.ar ?? '',
+      );
+      setElectricity(!!existingPlot.electricity);
+      setWater(!!existingPlot.water);
+      setRoad(!!existingPlot.road);
+      setShowMore(true);
+      setPhotos([]); // newly picked photos only -- existing URLs preserved separately
+    }
+  }, [visible, existingPlot, lang]);
+
+  const area = geodesicArea(effectiveCoords);
 
   const remaining = MAX_PHOTOS - photos.length;
 
@@ -210,34 +247,60 @@ export default function CreatePlotForm({
       }
     }
 
-    const result = await createPlot({
-      coords,
-      district,
-      use,
-      price: Math.floor(priceNum),
-      currency,
-      phone: phone || undefined,
-      desc: description ? { ar: description } : undefined,
-      area_m2: Math.round(area),
-      electricity,
-      water,
-      water_source: water ? (waterSource || '') : '',
-      road,
-      images: imageUrls,
-    });
+    // Merge: preserve existing image URLs + add newly uploaded ones
+    const finalImages = isEdit
+      ? [...(existingPlot!.images ?? []), ...imageUrls]
+      : imageUrls;
+
+    let result: { error?: string; id?: string; ok?: boolean };
+    if (isEdit) {
+      const r = await updatePlot(existingPlot!.id, {
+        district,
+        use,
+        price: Math.floor(priceNum),
+        currency,
+        phone: phone || undefined,
+        desc: description ? { ar: description } : undefined,
+        electricity,
+        water,
+        water_source: water,
+        road,
+        images: finalImages,
+      });
+      result = r;
+    } else {
+      result = await createPlot({
+        coords: effectiveCoords,
+        district,
+        use,
+        price: Math.floor(priceNum),
+        currency,
+        phone: phone || undefined,
+        desc: description ? { ar: description } : undefined,
+        area_m2: Math.round(area),
+        electricity,
+        water,
+        water_source: water ? (waterSource || '') : '',
+        road,
+        images: finalImages,
+      });
+    }
     setSaving(false);
 
     if (result.error) {
       // Show the actual error during development so we can fix what's wrong
+      const failKey = isEdit ? 'update_failed' : 'save_failed';
       const err = result.error === 'not_signed_in'
         ? t(lang, 'must_signin')
-        : `${t(lang, 'save_failed')}\n\n${result.error}`;
+        : `${t(lang, failKey)}\n\n${result.error}`;
       Alert.alert(t(lang, 'app_title'), err);
       return;
     }
-    Alert.alert(t(lang, 'app_title'), t(lang, 'saved_ok'), [
-      { text: 'OK', onPress: () => { onSaved(); onClose(); } },
-    ]);
+    Alert.alert(
+      t(lang, 'app_title'),
+      t(lang, isEdit ? 'updated_ok' : 'saved_ok'),
+      [{ text: 'OK', onPress: () => { onSaved(); onClose(); } }],
+    );
   };
 
   return (
@@ -255,7 +318,9 @@ export default function CreatePlotForm({
           <Pressable onPress={onClose} hitSlop={12}>
             <Text style={s.close}>✕</Text>
           </Pressable>
-          <Text style={s.title}>{t(lang, 'fill_details')}</Text>
+          <Text style={s.title}>
+            {t(lang, isEdit ? 'edit_plot_title' : 'fill_details')}
+          </Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -264,6 +329,15 @@ export default function CreatePlotForm({
           contentContainerStyle={s.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
+          {isEdit && (
+            <View style={s.editWarning}>
+              <Text style={s.editWarningIcon}>ℹ</Text>
+              <Text style={s.editWarningText}>
+                {t(lang, 'edit_warning')}
+              </Text>
+            </View>
+          )}
+
           <Row label={`${t(lang, 'filter_area')}: ${fmtArea(area)}`}>
             <Text style={s.areaNote}>
               {coords.length} {coords.length === 1 ? 'point' : 'points'}
@@ -447,11 +521,13 @@ export default function CreatePlotForm({
                 <Text style={s.ctaText}>
                   {uploadingPhotos
                     ? t(lang, 'uploading_photos')
-                    : t(lang, 'saving')}
+                    : t(lang, isEdit ? 'updating' : 'saving')}
                 </Text>
               </View>
             ) : (
-              <Text style={s.ctaText}>{t(lang, 'save')}</Text>
+              <Text style={s.ctaText}>
+                {t(lang, isEdit ? 'edit_plot' : 'save')}
+              </Text>
             )}
           </TouchableOpacity>
         </View>
@@ -642,13 +718,8 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   ctaText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  savingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
+  savingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 
-  // Photos
   photoHint: { color: colors.muted, fontSize: 12, marginBottom: 4 },
   photoStrip: { gap: 8, paddingVertical: 4 },
   photoThumb: {
@@ -684,11 +755,7 @@ const s = StyleSheet.create({
     borderRadius: 4,
   },
   photoCoverText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  photoBtns: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: 4,
-  },
+  photoBtns: { flexDirection: 'row', gap: spacing.sm, marginTop: 4 },
   photoBtn: {
     flex: 1,
     flexDirection: 'row',
@@ -704,4 +771,17 @@ const s = StyleSheet.create({
   },
   photoBtnIcon: { fontSize: 18 },
   photoBtnText: { color: colors.text, fontSize: 13, fontWeight: '600' },
+
+  editWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(224, 160, 63, 0.1)',
+    borderWidth: 1,
+    borderColor: colors.warn,
+    borderRadius: radii.md,
+    padding: spacing.md,
+  },
+  editWarningIcon: { color: colors.warn, fontSize: 18, fontWeight: '800' },
+  editWarningText: { flex: 1, color: colors.text, fontSize: 12, lineHeight: 18 },
 });

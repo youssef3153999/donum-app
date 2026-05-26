@@ -13,10 +13,12 @@ import { fetchMyPlots, deletePlot, type Plot } from '@/data/plots';
 import { fmtArea, formatPrice, geodesicArea } from '@/lib/geometry';
 import { colors, radii, spacing } from '@/lib/theme';
 import { t, type Lang } from '@/lib/i18n';
+import CreatePlotForm from '@/screens/CreatePlotForm';
 
 export default function MyPlotsScreen({ lang }: { lang: Lang }) {
   const [plots, setPlots] = useState<Plot[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [editing, setEditing] = useState<Plot | null>(null);
 
   const load = useCallback(async () => {
     const list = await fetchMyPlots();
@@ -45,6 +47,13 @@ export default function MyPlotsScreen({ lang }: { lang: Lang }) {
     ]);
   };
 
+  const onEdit = (p: Plot) => setEditing(p);
+  const closeEdit = () => setEditing(null);
+  const onEdited = () => {
+    setEditing(null);
+    load();
+  };
+
   if (plots === null) {
     return (
       <View style={s.center}>
@@ -62,43 +71,81 @@ export default function MyPlotsScreen({ lang }: { lang: Lang }) {
   }
 
   return (
-    <FlatList
-      data={plots}
-      keyExtractor={p => p.id}
-      contentContainerStyle={{ padding: spacing.md, gap: spacing.md }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brandSoft} />}
-      renderItem={({ item }) => {
-        const title =
-          item.title?.[lang] || item.title?.en || `Plot in ${item.district}`;
-        const area = item.area_m2 ?? geodesicArea(item.coords);
-        return (
-          <View style={s.card}>
-            {item.images?.[0] ? (
-              <Image source={{ uri: item.images[0] }} style={s.thumb} />
-            ) : (
-              <View style={[s.thumb, s.thumbEmpty]}><Text style={s.muted}>—</Text></View>
-            )}
-            <View style={s.body}>
-              <Text style={s.title} numberOfLines={1}>{title}</Text>
-              <Text style={s.meta}>{item.district} · {item.use}</Text>
-              <View style={s.row}>
-                <Text style={s.price}>{formatPrice(item.price, item.currency)}</Text>
-                <Text style={s.muted}>{fmtArea(area)}</Text>
-              </View>
-              <View style={s.statsRow}>
-                <Text style={s.stat}>{(item.view_count ?? 0)} views</Text>
-                <View style={[s.pill, { backgroundColor: pillBg(item.status) }]}>
-                  <Text style={s.pillText}>{t(lang, 'status_' + item.status)}</Text>
+    <>
+      <FlatList
+        data={plots}
+        keyExtractor={p => p.id}
+        contentContainerStyle={{ padding: spacing.md, gap: spacing.md }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.brandSoft}
+          />
+        }
+        renderItem={({ item }) => {
+          const title =
+            item.title?.[lang] || item.title?.en || `Plot in ${item.district}`;
+          const area = item.area_m2 ?? geodesicArea(item.coords);
+          return (
+            <View style={s.card}>
+              {item.images?.[0] ? (
+                <Image source={{ uri: item.images[0] }} style={s.thumb} />
+              ) : (
+                <View style={[s.thumb, s.thumbEmpty]}>
+                  <Text style={s.muted}>—</Text>
+                </View>
+              )}
+              <View style={s.body}>
+                <Text style={s.title} numberOfLines={1}>
+                  {title}
+                </Text>
+                <Text style={s.meta}>
+                  {item.district} · {item.use}
+                </Text>
+                <View style={s.row}>
+                  <Text style={s.price}>
+                    {formatPrice(item.price, item.currency)}
+                  </Text>
+                  <Text style={s.muted}>{fmtArea(area)}</Text>
+                </View>
+                <View style={s.statsRow}>
+                  <Text style={s.stat}>{item.view_count ?? 0} views</Text>
+                  <View
+                    style={[s.pill, { backgroundColor: pillBg(item.status) }]}
+                  >
+                    <Text style={s.pillText}>
+                      {t(lang, 'status_' + item.status)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={s.actions}>
+                  <TouchableOpacity
+                    style={s.editBtn}
+                    onPress={() => onEdit(item)}
+                  >
+                    <Text style={s.editText}>✎ {t(lang, 'edit_plot')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => onDelete(item.id)}>
+                    <Text style={s.danger}>{t(lang, 'delete')}</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-              <TouchableOpacity onPress={() => onDelete(item.id)}>
-                <Text style={s.danger}>{t(lang, 'delete')}</Text>
-              </TouchableOpacity>
             </View>
-          </View>
-        );
-      }}
-    />
+          );
+        }}
+      />
+
+      {/* Edit modal -- reuses the same form in edit mode */}
+      <CreatePlotForm
+        visible={!!editing}
+        coords={editing?.coords ?? []}
+        lang={lang}
+        existingPlot={editing}
+        onClose={closeEdit}
+        onSaved={onEdited}
+      />
+    </>
   );
 }
 
@@ -111,24 +158,66 @@ const pillBg = (status: string) => {
 };
 
 const s = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bg,
+  },
   empty: { color: colors.muted, fontSize: 16 },
   muted: { color: colors.muted, fontSize: 13 },
   card: {
-    flexDirection: 'row', gap: spacing.md,
-    backgroundColor: colors.panel, borderRadius: radii.lg,
-    borderColor: colors.border, borderWidth: 1, padding: spacing.md,
+    flexDirection: 'row',
+    gap: spacing.md,
+    backgroundColor: colors.panel,
+    borderRadius: radii.lg,
+    borderColor: colors.border,
+    borderWidth: 1,
+    padding: spacing.md,
   },
-  thumb: { width: 90, height: 90, borderRadius: radii.md, backgroundColor: colors.panel2 },
+  thumb: {
+    width: 90,
+    height: 90,
+    borderRadius: radii.md,
+    backgroundColor: colors.panel2,
+  },
   thumbEmpty: { alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, justifyContent: 'space-between' },
   title: { color: colors.text, fontSize: 15, fontWeight: '600' },
   meta: { color: colors.muted, fontSize: 12, marginTop: 2 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 6,
+  },
   price: { color: colors.brandSoft, fontWeight: '700', fontSize: 14 },
-  statsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
   stat: { color: colors.muted, fontSize: 12 },
-  pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radii.pill },
+  pill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
+  },
   pillText: { color: '#0C1110', fontSize: 11, fontWeight: '700' },
-  danger: { color: colors.danger, fontSize: 12, marginTop: 6 },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    gap: 12,
+  },
+  editBtn: {
+    backgroundColor: colors.brand,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+  },
+  editText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  danger: { color: colors.danger, fontSize: 12 },
 });

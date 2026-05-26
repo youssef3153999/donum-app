@@ -152,6 +152,12 @@ const ar: Dict = {
   investment_disclaimer: 'هذه تقديرات تعليمية فقط بناءً على بيانات مماثلة. الاستثمار العقاري يحمل مخاطر. استشر متخصصاً قبل القرار.',
   purchase_price: 'سعر الشراء',
   years_label: 'عدد السنوات',
+  edit_plot: 'تعديل',
+  edit_plot_title: 'تعديل الأرض',
+  edit_warning: 'بعد التعديل ستحتاج الأرض مراجعة جديدة قبل الظهور للعموم',
+  updated_ok: 'تم التعديل! بانتظار المراجعة.',
+  update_failed: 'فشل التعديل، حاول مرة أخرى',
+  updating: 'جاري التعديل...',
 
   required_signin: 'يلزم تسجيل الدخول',
 };
@@ -303,6 +309,12 @@ const en: Dict = {
   investment_disclaimer: 'These are educational estimates based on similar listings. Real estate carries risk. Consult a professional before investing.',
   purchase_price: 'Purchase price',
   years_label: 'Number of years',
+  edit_plot: 'Edit',
+  edit_plot_title: 'Edit plot',
+  edit_warning: 'After editing, the plot will need re-approval before going public',
+  updated_ok: 'Updated! Waiting for review.',
+  update_failed: 'Update failed, try again',
+  updating: 'Updating...',
 
   required_signin: 'Sign in required',
 };
@@ -445,6 +457,11 @@ const de: Dict = {
   above_market: 'Über Markt um',
   at_market: 'Zum Marktpreis',
   not_enough_data: 'Nicht genügend Daten für diese Region',
+  market_avg_price: 'Marktdurchschnitt',
+  below_market: 'Unter Markt um',
+  above_market: 'Über Markt um',
+  at_market: 'Zum Marktpreis',
+  not_enough_data: 'Nicht genügend Daten für diese Region',
   projected_value: 'Prognostizierter Wert',
   after_years: 'nach {n} Jahren',
   annual_growth: 'Jährliches Wachstum',
@@ -454,6 +471,12 @@ const de: Dict = {
   investment_disclaimer: 'Dies sind bildende Schätzungen basierend auf ähnlichen Angeboten. Immobilien bergen Risiken. Konsultieren Sie vor der Investition einen Fachmann.',
   purchase_price: 'Kaufpreis',
   years_label: 'Anzahl Jahre',
+  edit_plot: 'Bearbeiten',
+  edit_plot_title: 'Grundstück bearbeiten',
+  edit_warning: 'Nach der Bearbeitung muss das Grundstück erneut genehmigt werden',
+  updated_ok: 'Aktualisiert! Warten auf Prüfung.',
+  update_failed: 'Aktualisierung fehlgeschlagen',
+  updating: 'Wird aktualisiert...',
 
   required_signin: 'Anmeldung erforderlich',
 };

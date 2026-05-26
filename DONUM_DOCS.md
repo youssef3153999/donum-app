@@ -1,6 +1,6 @@
 # DONUM — Master Project Documentation
 
-> **Last updated:** 2026-05-26
+> **Last updated:** 2026-05-26 (PM)
 > **Owner:** Youssef Al Ali (`youssefalali91@gmail.com`)
 > **Collaborator:** Ghaith
 > **Read this file daily** to know where the project stands.
@@ -297,6 +297,7 @@ WHERE id = '<USER_ID from auth.users>';
 | 14 | Verified seller badge | ✅ |
 | 15 | Profile verification card + WhatsApp request | ✅ |
 | 16 | Investment calculator (market avg + projection) | ✅ |
+| 17 | Edit listing flow (resets to `pending` for re-approval) | ✅ |
 
 ---
 
@@ -310,8 +311,9 @@ will pick up from there. Numbering matches the 25-item list given on
 
 1. **Phone OTP verification.** Replaces / supplements email login. Stops fake
    accounts.
-2. **Edit listing flow.** Currently the only way to change price is delete +
-   recreate. Critical.
+2. ~~**Edit listing flow.**~~ ✅ Done 2026-05-26. Owner can edit any field from
+   "My plots" → ✎ Edit button. After edit, status resets to `pending` for
+   re-moderation (anti bait-and-switch).
 3. **Mark plot as sold.** Don't delete; flip `status` to `'sold'`. Preserves
    historical pricing data for the market calculator.
 4. **Report a listing.** Button on each plot, admin moderation queue.
@@ -465,6 +467,9 @@ The repo is **private**, so the following secrets live inside the code
 | Bottom sheet has a backdrop dim | 2026-05-22 | Matches Airbnb / Booking UX expectation |
 | `.env.example` neutered; no .env needed | 2026-05-26 | Repo is private, all values live in code — simpler for new contributors |
 | Added `SETUP.md` for new contributors | 2026-05-26 | Ghaith and any future collaborator should be able to run the project without asking Youssef |
+| Edit reuses CreatePlotForm with `existingPlot` prop | 2026-05-26 | One form, two modes — half the code to maintain |
+| Edited plots reset to `status='pending'` | 2026-05-26 | Anti bait-and-switch: prevents seller from publishing clean listing, then editing to spam after approval |
+| Coords/area can't be edited | 2026-05-26 | Polygon was drawn at creation — to redraw, delete + recreate (rare operation) |
 
 ---
 
