@@ -333,130 +333,62 @@ export async function createPlot(p: NewPlot): Promise<{ id?: string; error?: str
   return { id: data?.id };
 }
 
-// Profile shape returned to the app
-export type Profile = {
-  id: string;
-  is_verified: boolean;
-  verified_at: string | null;
-  full_name: string | null;
-  phone: string | null;
-};
+// Reasons a plot can be reported -- keep in sync with i18n keys
+export type ReportReason =
+  | 'spam'
+  | 'fake'
+  | 'inappropriate'
+  | 'already_sold'
+  | 'wrong_info'
+  | 'other';
 
-export async function fetchMyProfile(): Promise<Profile | null> {
+/**
+ * Permanently delete the current user's account, their profile, and all
+ * their plots. Calls a Postgres function `delete_my_account` defined in
+ * Supabase that runs with elevated privileges to remove the auth row.
+ * After this returns, the local session is also cleared.
+ */
+export async function deleteMyAccount(): Promise<{ ok: boolean; error?: string }> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id,is_verified,verified_at,full_name,phone')
-    .eq('id', user.id)
-    .maybeSingle();
-  if (error || !data) return null;
-  return {
-    id: data.id,
-    is_verified: !!data.is_verified,
-    verified_at: data.verified_at ?? null,
-    full_name: data.full_name ?? null,
-    phone: data.phone ?? null,
-  };
-}
+  if (!user) return { ok: false, error: 'not_signed_in' };
 
-// Market statistics for the investment calculator
-export type MarketStats = {
-  count: number;
-  avgPricePerM2: number;
-  minPricePerM2: number;
-  maxPricePerM2: number;
-  currency: string;
-};
 
-export async function fetchMarketStats(
-  district: string,
-  use: string,
-): Promise<MarketStats | null> {
-  const { data, error } = await supabase
-    .from('plots')
-    .select('price,currency,area_m2,status')
-    .eq('district', district)
-    .eq('use', use)
-    .in('status', ['active', 'sold']);
-  if (error || !data) {
-    console.warn('fetchMarketStats:', error?.message);
-    return null;
-  }
-  const samples = data
-    .map((r: any) => {
-      const area = Number(r.area_m2);
-      const price = Number(r.price);
-      if (!Number.isFinite(area) || area <= 0) return null;
-      if (!Number.isFinite(price) || price <= 0) return null;
-      return { ppm2: price / area, currency: String(r.currency || 'USD') };
-    })
-    .filter((x): x is { ppm2: number; currency: string } => !!x);
-
-  if (samples.length < 2) return null;
-
-  const currCount = new Map<string, number>();
-  samples.forEach(s =>
-    currCount.set(s.currency, (currCount.get(s.currency) ?? 0) + 1),
-  );
-  const currency = [...currCount.entries()].sort((a, b) => b[1] - a[1])[0][0];
-
-  const sameCurrency = samples.filter(s => s.currency === currency);
-  const prices = sameCurrency.map(s => s.ppm2);
-  const sum = prices.reduce((a, b) => a + b, 0);
-  return {
-    count: sameCurrency.length,
-    avgPricePerM2: sum / prices.length,
-    minPricePerM2: Math.min(...prices),
-    maxPricePerM2: Math.max(...prices),
-    currency,
-  };
-}
-
-// Update payload for editing an existing plot
-export type UpdatePlotPayload = {
-  district?: string;
-  use?: string;
-  price?: number;
-  currency?: string;
-  phone?: string;
-  electricity?: boolean;
-  water?: boolean;
-  road?: boolean;
-  water_source?: boolean | string;
-  desc?: { ar?: string; de?: string; en?: string };
-  images?: string[];
-};
-
-export async function updatePlot(
-  id: string,
-  p: UpdatePlotPayload,
-): Promise<{ ok: boolean; error?: string }> {
-  const row: Record<string, any> = {};
-  if (p.district !== undefined) row.district = p.district;
-  if (p.use !== undefined) row.use = p.use;
-  if (p.price !== undefined) row.price = p.price;
-  if (p.currency !== undefined) row.currency = p.currency;
-  if (p.phone !== undefined) row.phone = p.phone;
-  if (p.electricity !== undefined) row.electricity = !!p.electricity;
-  if (p.water !== undefined) row.water = !!p.water;
-  if (p.road !== undefined) row.road = !!p.road;
-  if (p.water_source !== undefined) {
-    row.water_source = !!p.water_source;
-  }
-  if (p.desc) {
-    if (p.desc.ar !== undefined) row.desc_ar = p.desc.ar;
-    if (p.desc.de !== undefined) row.desc_de = p.desc.de;
-    if (p.desc.en !== undefined) row.desc_en = p.desc.en;
-  }
-  if (p.images !== undefined) row.images = p.images;
-
-  // Reset status to pending after edit -- requires re-approval
-  row.status = 'pending';
-
-  const { error } = await supabase.from('plots').update(row).eq('id', id);
+  const { error } = await supabase.rpc('delete_my_account');
   if (error) {
-    console.warn('updatePlot failed:', error.message);
+    console.warn('deleteMyAccount failed:', error.message);
+    return { ok: false, error: error.message };
+  }
+
+  // Clear local session so the app doesn't keep a phantom user
+  await supabase.auth.signOut();
+  return { ok: true };
+}
+
+// Reasons a plot can be reported -- keep in sync with i18n keys
+export type ReportReason =
+  | 'spam'
+  | 'fake'
+  | 'inappropriate'
+  | 'already_sold'
+  | 'wrong_info'
+  | 'other';
+
+export async function reportPlot(
+  plotId: string,
+  reason: ReportReason,
+  note?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  const row = {
+    plot_id: plotId,
+    reporter_id: user?.id ?? null,
+    reason,
+    note: note?.trim() || null,
+    status: 'open',
+  };
+  const { error } = await supabase.from('reports').insert(row);
+  if (error) {
+    console.warn('reportPlot failed:', error.message);
     return { ok: false, error: error.message };
   }
   return { ok: true };

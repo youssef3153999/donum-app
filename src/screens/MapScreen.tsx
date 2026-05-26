@@ -42,6 +42,7 @@ import FilterSheet, {
   type Filters,
 } from '@/screens/FilterSheet';
 import InvestmentCalculator from '@/screens/InvestmentCalculator';
+import ReportSheet from '@/screens/ReportSheet';
 import {
   DISTRICT_COORDS,
   DISTRICT_KEYS,
@@ -489,6 +490,7 @@ function DetailCard({
   };
 
   const [showCalc, setShowCalc] = useState(false);
+  const [showReport, setShowReport] = useState(false);
 
   const title =
     plot.title?.[lang] || plot.title?.en || `Plot in ${plot.district}`;
@@ -641,6 +643,14 @@ function DetailCard({
                 {favorited ? '♥' : '♡'}
               </Text>
             </Pressable>
+            <Pressable
+              onPress={() => setShowReport(true)}
+              hitSlop={12}
+              style={[s.iconCircle, { marginLeft: 8 }]}
+              accessibilityLabel={t(lang, 'report_listing')}
+            >
+              <Text style={s.iconCircleText}>⚑</Text>
+            </Pressable>
           </View>
 
           {/* Status badge */}
@@ -791,6 +801,13 @@ function DetailCard({
         initialArea={area}
         currency={plot.currency}
         onClose={() => setShowCalc(false)}
+      />
+
+      <ReportSheet
+        visible={showReport}
+        plotId={plot.id}
+        lang={lang}
+        onClose={() => setShowReport(false)}
       />
     </Animated.View>
   );
@@ -1344,8 +1361,6 @@ const s = StyleSheet.create({
   },
   actionPrimaryIcon: { color: '#fff', fontSize: 14, fontWeight: '700' },
   actionPrimaryText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  actionDisabled: { opacity: 0.4 },
-
   // Investment calculator CTA inside DetailCard
   calcBtn: {
     flexDirection: 'row',
@@ -1359,15 +1374,7 @@ const s = StyleSheet.create({
     marginTop: spacing.md,
   },
   calcBtnIcon: { fontSize: 24 },
-  calcBtnTitle: {
-    color: colors.accent,
-    fontSize: 14,
-    fontWeight: '800',
-  },
+  calcBtnTitle: { color: colors.accent, fontSize: 14, fontWeight: '800' },
   calcBtnSubtitle: { color: colors.muted, fontSize: 11, marginTop: 2 },
-  calcBtnArrow: {
-    color: colors.accent,
-    fontSize: 18,
-    fontWeight: '800',
-  },
+  calcBtnArrow: { color: colors.accent, fontSize: 18, fontWeight: '800' },
 });

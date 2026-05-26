@@ -6,12 +6,17 @@ import {
   StyleSheet,
   Alert,
   Linking,
+  Pressable,
+  Modal,
+  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { fetchMyProfile, type Profile } from '@/data/plots';
+import { fetchMyProfile, deleteMyAccount, type Profile } from '@/data/plots';
 import { colors, radii, spacing } from '@/lib/theme';
 import { t, type Lang } from '@/lib/i18n';
+import LegalScreen, { type LegalKind } from '@/screens/LegalScreen';
 
 // WhatsApp number for verification requests (set to admin/owner number)
 const VERIFY_WHATSAPP = '963999999999';
@@ -25,6 +30,10 @@ export default function ProfileScreen({
 }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [legalOpen, setLegalOpen] = useState<LegalKind | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteText, setDeleteText] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const loadProfile = useCallback(async () => {
     const p = await fetchMyProfile();
@@ -53,6 +62,27 @@ export default function ProfileScreen({
         onPress: () => supabase.auth.signOut(),
       },
     ]);
+  };
+
+  const openDelete = () => {
+    setDeleteText('');
+    setDeleteOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    setDeleting(true);
+    const res = await deleteMyAccount();
+    setDeleting(false);
+    if (!res.ok) {
+      Alert.alert(
+        t(lang, 'app_title'),
+        `${t(lang, 'delete_account_failed')}\n\n${res.error ?? ''}`,
+      );
+      return;
+    }
+    setDeleteOpen(false);
+    Alert.alert(t(lang, 'app_title'), t(lang, 'delete_account_success'));
+    // onAuthStateChange will fire from signOut() and reset the UI
   };
 
   const requestVerification = () => {
@@ -130,11 +160,106 @@ export default function ProfileScreen({
         </View>
       </View>
 
+      {/* Legal section */}
+      <View style={s.section}>
+        <Text style={s.label}>{t(lang, 'legal')}</Text>
+        <Pressable
+          onPress={() => setLegalOpen('privacy')}
+          style={s.legalRow}
+        >
+          <Text style={s.legalText}>{t(lang, 'privacy_policy')}</Text>
+          <Text style={s.legalArrow}>›</Text>
+        </Pressable>
+        <View style={s.legalDivider} />
+        <Pressable
+          onPress={() => setLegalOpen('terms')}
+          style={s.legalRow}
+        >
+          <Text style={s.legalText}>{t(lang, 'terms_of_service')}</Text>
+          <Text style={s.legalArrow}>›</Text>
+        </Pressable>
+      </View>
+
       {user && (
-        <TouchableOpacity style={s.signOut} onPress={signOut}>
-          <Text style={s.signOutText}>{t(lang, 'sign_out')}</Text>
-        </TouchableOpacity>
+        <>
+          <TouchableOpacity style={s.signOut} onPress={signOut}>
+            <Text style={s.signOutText}>{t(lang, 'sign_out')}</Text>
+          </TouchableOpacity>
+
+          {/* Delete account -- destructive, hidden away */}
+          <TouchableOpacity style={s.deleteAcc} onPress={openDelete}>
+            <Text style={s.deleteAccText}>{t(lang, 'delete_account')}</Text>
+          </TouchableOpacity>
+        </>
       )}
+
+      {legalOpen && (
+        <LegalScreen
+          visible={!!legalOpen}
+          kind={legalOpen}
+          lang={lang}
+          onClose={() => setLegalOpen(null)}
+        />
+      )}
+
+      {/* Delete account confirmation modal */}
+      <Modal
+        visible={deleteOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !deleting && setDeleteOpen(false)}
+      >
+        <Pressable
+          style={s.modalBackdrop}
+          onPress={() => !deleting && setDeleteOpen(false)}
+        />
+        <View style={s.modalCard}>
+          <Text style={s.modalIcon}>⚠</Text>
+          <Text style={s.modalTitle}>{t(lang, 'delete_account')}</Text>
+          <Text style={s.modalDesc}>{t(lang, 'delete_account_warning')}</Text>
+          <Text style={s.modalDesc}>{t(lang, 'delete_account_confirm')}</Text>
+
+          <Text style={s.modalHint}>{t(lang, 'delete_account_typed')}</Text>
+          <TextInput
+            style={s.modalInput}
+            value={deleteText}
+            onChangeText={setDeleteText}
+            placeholder={t(lang, 'delete_account_word')}
+            placeholderTextColor={colors.muted}
+            autoCapitalize="characters"
+            editable={!deleting}
+          />
+
+          <View style={s.modalActions}>
+            <TouchableOpacity
+              style={s.modalCancel}
+              onPress={() => setDeleteOpen(false)}
+              disabled={deleting}
+            >
+              <Text style={s.modalCancelText}>{t(lang, 'cancel')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                s.modalDelete,
+                (deleteText !== t(lang, 'delete_account_word') || deleting) &&
+                  s.modalDeleteDisabled,
+              ]}
+              onPress={confirmDelete}
+              disabled={
+                deleteText !== t(lang, 'delete_account_word') || deleting
+              }
+            >
+              {deleting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={s.modalDeleteText}>
+                  {t(lang, 'delete_account_btn')}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -196,6 +321,16 @@ const s = StyleSheet.create({
   },
   verifyCtaText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 
+  legalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  legalText: { color: colors.text, fontSize: 14, fontWeight: '500' },
+  legalArrow: { color: colors.muted, fontSize: 18 },
+  legalDivider: { height: 1, backgroundColor: colors.border },
+
   langRow: { flexDirection: 'row', gap: 8 },
   langBtn: {
     paddingHorizontal: 14,
@@ -215,4 +350,84 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   signOutText: { color: '#fff', fontWeight: '700' },
+
+  deleteAcc: { marginTop: spacing.md, paddingVertical: 10, alignItems: 'center' },
+  deleteAccText: {
+    color: colors.muted,
+    fontSize: 12,
+    textDecorationLine: 'underline',
+  },
+
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  modalCard: {
+    position: 'absolute',
+    top: '20%',
+    left: spacing.lg,
+    right: spacing.lg,
+    backgroundColor: colors.panel,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    padding: spacing.lg,
+    elevation: 16,
+  },
+  modalIcon: { fontSize: 36, color: colors.danger, textAlign: 'center', marginBottom: 8 },
+  modalTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  modalDesc: {
+    color: colors.text,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  modalHint: {
+    color: colors.muted,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  modalInput: {
+    backgroundColor: colors.panel2,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    color: colors.text,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: spacing.lg },
+  modalCancel: {
+    flex: 1,
+    backgroundColor: colors.panel2,
+    borderRadius: radii.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalCancelText: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  modalDelete: {
+    flex: 1,
+    backgroundColor: colors.danger,
+    borderRadius: radii.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalDeleteText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  modalDeleteDisabled: { opacity: 0.4 },
 });

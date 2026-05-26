@@ -298,6 +298,9 @@ WHERE id = '<USER_ID from auth.users>';
 | 15 | Profile verification card + WhatsApp request | ✅ |
 | 16 | Investment calculator (market avg + projection) | ✅ |
 | 17 | Edit listing flow (resets to `pending` for re-approval) | ✅ |
+| 18 | Privacy Policy + Terms of Service screens (AR/EN/DE) | ✅ |
+| 19 | Report listing flow (6 reasons + optional note → `reports` table) | ✅ |
+| 20 | Account deletion (typed-confirm modal → `delete_my_account()` RPC) | ✅ |
 
 ---
 
@@ -316,12 +319,21 @@ will pick up from there. Numbering matches the 25-item list given on
    re-moderation (anti bait-and-switch).
 3. **Mark plot as sold.** Don't delete; flip `status` to `'sold'`. Preserves
    historical pricing data for the market calculator.
-4. **Report a listing.** Button on each plot, admin moderation queue.
+4. ~~**Report a listing.**~~ ✅ Done 2026-05-26. ⚑ button in DetailCard
+   header opens `ReportSheet` with 6 reasons + optional note. Reports go
+   to `public.reports` table. Admin moderation queue still TODO (will
+   come with the admin panel).
 5. **Sentry crash reporting.** Wire `@sentry/react-native`. Without this we
    can't know what's breaking for users.
-6. **Privacy policy + Terms of service** (in-app + hosted web pages).
-   Required by Google Play.
-7. **Account deletion from inside the app.** Required by Play Store + GDPR.
+6. ~~**Privacy policy + Terms of service**~~ ✅ Done 2026-05-26. In-app
+   `LegalScreen` (Modal) accessed from Profile screen. Three languages.
+   Content embedded so it works offline. Still TODO: mirror the same
+   text on the public website at `/privacy` and `/terms`.
+7. ~~**Account deletion from inside the app.**~~ ✅ Done 2026-05-26.
+   "Delete account" button (subtle, under sign-out) opens a modal with
+   warning + typed confirmation (`DELETE` / `LÖSCHEN` / `حذف`). On confirm,
+   calls Supabase RPC `delete_my_account()` which deletes plots, profile,
+   and `auth.users` row in one transaction, then signs the user out.
 
 ### Tier 2 — Quality that converts users to advocates
 
