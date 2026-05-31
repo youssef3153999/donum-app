@@ -62,7 +62,7 @@ async function attachVerification(plots: Plot[]): Promise<Plot[]> {
   );
   if (ownerIds.length === 0) return plots;
   const { data, error } = await supabase
-    .from('profiles')
+    .from('public_profiles')
     .select('id,is_verified')
     .in('id', ownerIds);
   if (error || !data) return plots;
@@ -382,5 +382,4 @@ export async function reportPlot(
     console.warn('reportPlot failed:', error.message);
     return { ok: false, error: error.message };
   }
-  return { ok: true };
-}
+  return { ok: tru

@@ -269,8 +269,19 @@ auto-insert a profile row when a new user signs up.
   - Max 5 MB, mime: jpeg/png/webp
   - Policies: authenticated insert, public read, owners delete own.
 
+### Public-safe view
+- `public_profiles` (view) — exposes ONLY `id, name, is_verified` from
+  `profiles`. Granted `select` to `anon, authenticated`. Clients read seller
+  name + verified badge from THIS view, never from the base table.
+  - App: `attachVerification` in `src/data/plots.ts` reads from `public_profiles`.
+  - Website: `MapBrowser.tsx` reads seller `name` from `public_profiles`.
+
 ### RLS (Row Level Security)
-- `profiles`: anyone can read, owner can update own.
+- `profiles`: owner reads OWN row only (`auth.uid() = id`); owner can update
+  own. **No public read** — the old "anyone can read" policies were dropped
+  2026-05-31 because they leaked `phone` + admin flags to anyone with the anon
+  key. Public-safe fields go through `public_profiles` view. Admin reads use
+  the service role (bypasses RLS).
 - `plots`: insert as authenticated, select where status='active' for public,
   owner can update/delete own.
 - `storage.objects` (`plot-images`): authenticated upload, public select,
@@ -496,6 +507,7 @@ The repo is **private**, so the following secrets live inside the code
 | Split MapScreen into 4 small components | 2026-05-31 | MapScreen was 1400+ lines and kept getting truncated. Each piece (TopBar, FabStack, DrawingToolbar, PlotDetailSheet) is now <600 lines and editable safely |
 | Reanimated v3 replaces Animated API everywhere | 2026-05-31 | Smoother, runs on UI thread, future-proof |
 | Added subtle dark customMapStyle | 2026-05-31 | Minimalist look fits brand earth-tones; subtle enough not to hide satellite imagery |
+| Locked `profiles` table + added `public_profiles` view | 2026-05-31 | `profiles` had two public "read all" SELECT policies that leaked every user's `phone` and admin flags via the anon key. Dropped them, restricted SELECT to own row, and exposed only `id, name, is_verified` through a view that both clients now read. Verified: anon sees 0 base rows, 7 view rows. |
 
 ---
 
