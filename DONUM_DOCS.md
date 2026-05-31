@@ -1,6 +1,6 @@
 # DONUM — Master Project Documentation
 
-> **Last updated:** 2026-05-26 (PM)
+> **Last updated:** 2026-05-31
 > **Owner:** Youssef Al Ali (`youssefalali91@gmail.com`)
 > **Collaborator:** Ghaith
 > **Read this file daily** to know where the project stands.
@@ -137,6 +137,7 @@ together with RN 0.75.4 + AGP 8.5:**
 | react-native-safe-area-context | 4.10.9 | |
 | react-native-svg | 15.6.0 | |
 | react-native-image-picker | 7.1.2 | Camera permission must be requested manually |
+| react-native-map-clustering | latest | JS wrapper around react-native-maps for clustering |
 | @react-native-async-storage/async-storage | 1.24.0 | |
 | @supabase/supabase-js | 2.45.4 | |
 | @react-navigation/* | v6 | Bottom tabs |
@@ -182,14 +183,21 @@ C:\Dev\ardmap\
 │   │   └── plots.ts                  # fetchActivePlots, fetchMyPlots,
 │   │                                 # createPlot, deletePlot, fetchMyProfile,
 │   │                                 # fetchMarketStats, attachVerification
+│   ├── components\                   # Map sub-components (split 2026-05-31)
+│   │   ├── MapTopBar.tsx             # Floating search + filter button
+│   │   ├── MapFabStack.tsx           # Zoom + locate-me FABs (right side)
+│   │   ├── DrawingToolbar.tsx        # Top banner + bottom cancel/undo/finish
+│   │   └── PlotDetailSheet.tsx       # Bottom sheet with hero + actions
 │   ├── screens\
-│   │   ├── MapScreen.tsx             # Main map screen + DetailCard component
-│   │   ├── CreatePlotForm.tsx        # Modal form to create a plot
+│   │   ├── MapScreen.tsx             # Map orchestrator (uses /components)
+│   │   ├── CreatePlotForm.tsx        # Modal form (create + edit)
 │   │   ├── FilterSheet.tsx           # Filter bottom sheet
 │   │   ├── InvestmentCalculator.tsx  # ROI calculator modal
+│   │   ├── ReportSheet.tsx           # Report-listing modal
+│   │   ├── LegalScreen.tsx           # Privacy + Terms reader
 │   │   ├── AuthScreen.tsx            # Sign in / sign up
-│   │   ├── MyPlotsScreen.tsx         # User's own listings
-│   │   └── ProfileScreen.tsx         # Account + verification + language
+│   │   ├── MyPlotsScreen.tsx         # User's own listings (edit/delete)
+│   │   └── ProfileScreen.tsx         # Account + verification + delete
 │   └── App.tsx                       # Root, bottom tabs, NavigationContainer
 │
 ├── DONUM_DOCS.md                     # ← This file
@@ -301,6 +309,7 @@ WHERE id = '<USER_ID from auth.users>';
 | 18 | Privacy Policy + Terms of Service screens (AR/EN/DE) | ✅ |
 | 19 | Report listing flow (6 reasons + optional note → `reports` table) | ✅ |
 | 20 | Account deletion (typed-confirm modal → `delete_my_account()` RPC) | ✅ |
+| 21 | Map overhaul: edge-to-edge + marker clustering + Reanimated v3 + split components | ✅ |
 
 ---
 
@@ -337,8 +346,9 @@ will pick up from there. Numbering matches the 25-item list given on
 
 ### Tier 2 — Quality that converts users to advocates
 
-8. **Marker clustering** when >50 plots in view (use
-   `react-native-map-clustering`).
+8. ~~**Marker clustering**~~ ✅ Done 2026-05-31. Uses
+   `react-native-map-clustering@latest`. Wraps `react-native-maps`'s
+   MapView. Cluster color = brand, radius 50, min 3 markers.
 9. **In-app chat** seller ↔ buyer (Supabase Realtime channel).
 10. **Favorites + price-drop alerts.** Persist a `favorites` table.
 11. **Saved searches + new-plot notifications.** FCM push.
@@ -482,6 +492,10 @@ The repo is **private**, so the following secrets live inside the code
 | Edit reuses CreatePlotForm with `existingPlot` prop | 2026-05-26 | One form, two modes — half the code to maintain |
 | Edited plots reset to `status='pending'` | 2026-05-26 | Anti bait-and-switch: prevents seller from publishing clean listing, then editing to spam after approval |
 | Coords/area can't be edited | 2026-05-26 | Polygon was drawn at creation — to redraw, delete + recreate (rare operation) |
+| Map went edge-to-edge with translucent StatusBar | 2026-05-31 | Modern look matches Tier/Lime; headerShown disabled only for Map tab so other screens keep header |
+| Split MapScreen into 4 small components | 2026-05-31 | MapScreen was 1400+ lines and kept getting truncated. Each piece (TopBar, FabStack, DrawingToolbar, PlotDetailSheet) is now <600 lines and editable safely |
+| Reanimated v3 replaces Animated API everywhere | 2026-05-31 | Smoother, runs on UI thread, future-proof |
+| Added subtle dark customMapStyle | 2026-05-31 | Minimalist look fits brand earth-tones; subtle enough not to hide satellite imagery |
 
 ---
 

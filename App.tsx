@@ -54,7 +54,12 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
+      {/* Translucent over the map so it can render edge-to-edge */}
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent
+      />
       <NavigationContainer
         theme={{
           dark: true,
@@ -69,7 +74,10 @@ export default function App() {
         }}
       >
         <Tabs.Navigator
-          screenOptions={{
+          screenOptions={({ route }) => ({
+            // Hide the navigation header on the Map screen so the map can be
+            // truly edge-to-edge. Other tabs keep the standard header.
+            headerShown: route.name !== 'Map',
             headerStyle: { backgroundColor: colors.panel },
             headerTitleStyle: { color: colors.text, fontWeight: '700' },
             headerTitleAlign: 'center',
@@ -79,7 +87,7 @@ export default function App() {
               height: 56,
             },
             tabBarShowLabel: false,
-          }}
+          })}
         >
           <Tabs.Screen
             name="Map"

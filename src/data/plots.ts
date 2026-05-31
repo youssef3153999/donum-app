@@ -364,15 +364,6 @@ export async function deleteMyAccount(): Promise<{ ok: boolean; error?: string }
   return { ok: true };
 }
 
-// Reasons a plot can be reported -- keep in sync with i18n keys
-export type ReportReason =
-  | 'spam'
-  | 'fake'
-  | 'inappropriate'
-  | 'already_sold'
-  | 'wrong_info'
-  | 'other';
-
 export async function reportPlot(
   plotId: string,
   reason: ReportReason,
