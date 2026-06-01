@@ -92,15 +92,24 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            // Secrets come from ~/.gradle/gradle.properties (NOT committed).
+            // Falls back to debug signing if they're absent (e.g. on a CI
+            // machine without the keystore) so the build still runs.
+            if (project.hasProperty('DONUM_STORE_FILE')) {
+                storeFile file(DONUM_STORE_FILE)
+                storePassword DONUM_STORE_PASSWORD
+                keyAlias DONUM_KEY_ALIAS
+                keyPassword DONUM_KEY_PASSWORD
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig project.hasProperty('DONUM_STORE_FILE') ? signingConfigs.release : signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }

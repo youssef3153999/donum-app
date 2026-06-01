@@ -14,10 +14,9 @@ import Animated, {
   withTiming,
   withDelay,
 } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, spacing } from '@/lib/theme';
 import { t, type Lang } from '@/lib/i18n';
-
-const TOP_INSET = Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 44;
 
 type Props = {
   lang: Lang;
@@ -46,6 +45,11 @@ export default function MapTopBar({
   resultsCount,
   showResults,
 }: Props) {
+  // Real top inset (status bar / notch). StatusBar.currentHeight is
+  // unreliable on Android with a translucent, edge-to-edge status bar.
+  const insets = useSafeAreaInsets();
+  const topInset = Math.max(insets.top, Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0);
+
   const slide = useSharedValue(-100);
   const opacity = useSharedValue(0);
 
@@ -69,13 +73,18 @@ export default function MapTopBar({
   return (
     <>
       <Animated.View
-        style={[s.bar, { top: TOP_INSET + 8 }, barStyle]}
+        style={[s.bar, { top: topInset + 10 }, barStyle]}
         pointerEvents="box-none"
       >
-        <View style={s.inputWrap}>
+        <View
+          style={[
+            s.inputWrap,
+            { flexDirection: lang === 'ar' ? 'row-reverse' : 'row' },
+          ]}
+        >
           <Text style={s.icon}>🔍</Text>
           <TextInput
-            style={s.input}
+            style={[s.input, { textAlign: lang === 'ar' ? 'right' : 'left' }]}
             value={searchText}
             onChangeText={onSearchTextChange}
             onSubmitEditing={onSubmitSearch}
@@ -106,7 +115,7 @@ export default function MapTopBar({
 
       {showResults && (
         <Animated.View
-          style={[s.resultsBadge, { top: TOP_INSET + 62 }, badgeStyle]}
+          style={[s.resultsBadge, { top: topInset + 64 }, badgeStyle]}
         >
           <Text style={s.resultsBadgeText}>
             {resultsCount ?? 0} {t(lang, 'results_count')}

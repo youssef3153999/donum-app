@@ -28,7 +28,6 @@ export function formatPrice(value: number, currency: string): string {
   const symbol =
     currency === 'USD' ? '$' :
     currency === 'EUR' ? '€' :
-    currency === 'TRY' ? '₺' :
     currency === 'SYP' ? 'SYP' : currency;
   return `${Math.round(value)} ${symbol}`;
 }
@@ -36,8 +35,7 @@ export function formatPrice(value: number, currency: string): string {
 export function formatPriceCompact(value: number, currency: string): string {
   const symbol =
     currency === 'USD' ? '$' :
-    currency === 'EUR' ? '€' :
-    currency === 'TRY' ? '₺' : currency;
+    currency === 'EUR' ? '€' : currency;
   if (value >= 1_000_000) return (value / 1_000_000).toFixed(1) + 'M' + symbol;
   if (value >= 1_000) return Math.round(value / 1_000) + 'k' + symbol;
   return Math.round(value) + symbol;

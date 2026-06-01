@@ -89,6 +89,25 @@ export async function fetchActivePlots(): Promise<Plot[]> {
   return attachVerification(plots);
 }
 
+// Like fetchActivePlots but reports whether the network call failed, so the
+// UI can tell "no plots" apart from "couldn't load" (offline / server error).
+export async function fetchActivePlotsResult(): Promise<{
+  plots: Plot[];
+  ok: boolean;
+}> {
+  const { data, error } = await supabase
+    .from('plots')
+    .select(COLS)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.warn('fetchActivePlotsResult:', error.message);
+    return { plots: [], ok: false };
+  }
+  const plots = await attachVerification((data ?? []).map(rowToPlot));
+  return { plots, ok: true };
+}
+
 // Fetch the current user's profile (verification status, etc.)
 export type Profile = {
   id: string;
@@ -192,6 +211,69 @@ export async function fetchMyPlots(): Promise<Plot[]> {
     return [];
   }
   return (data ?? []).map(rowToPlot);
+}
+
+// ===== Favorites =====
+
+// Is the given plot in the current user's favorites?
+export async function fetchIsFavorited(plotId: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data } = await supabase
+    .from('favorites')
+    .select('plot_id')
+    .eq('user_id', user.id)
+    .eq('plot_id', plotId)
+    .maybeSingle();
+  return !!data;
+}
+
+// Add (on=true) or remove (on=false) a plot from the user's favorites.
+export async function setFavorite(
+  plotId: string,
+  on: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: 'not_signed_in' };
+  if (on) {
+    const { error } = await supabase
+      .from('favorites')
+      .upsert({ user_id: user.id, plot_id: plotId });
+    return { ok: !error, error: error?.message };
+  }
+  const { error } = await supabase
+    .from('favorites')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('plot_id', plotId);
+  return { ok: !error, error: error?.message };
+}
+
+// Fetch the current user's favorited plots (most recently favorited first).
+export async function fetchMyFavorites(): Promise<Plot[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data: favs, error: favErr } = await supabase
+    .from('favorites')
+    .select('plot_id')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+  if (favErr || !favs || favs.length === 0) return [];
+  const ids = favs.map((f: any) => f.plot_id as string);
+  const { data, error } = await supabase.from('plots').select(COLS).in('id', ids);
+  if (error || !data) return [];
+  const order = new Map(ids.map((id, i) => [id, i]));
+  const plots = (data as any[])
+    .map(rowToPlot)
+    .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+  return attachVerification(plots);
+}
+
+// Atomically bump a plot's view counter via the SECURITY DEFINER RPC.
+// Fire-and-forget: a failed count must never block opening the detail sheet.
+export async function incrementViewCount(plotId: string): Promise<void> {
+  const { error } = await supabase.rpc('increment_view_count', { p_id: plotId });
+  if (error) console.warn('incrementViewCount:', error.message);
 }
 
 export async function deletePlot(id: string): Promise<boolean> {
@@ -382,4 +464,5 @@ export async function reportPlot(
     console.warn('reportPlot failed:', error.message);
     return { ok: false, error: error.message };
   }
-  return { ok: tru
+  return { ok: true };
+}

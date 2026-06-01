@@ -9,6 +9,7 @@ import { colors } from '@/lib/theme';
 import { t, type Lang } from '@/lib/i18n';
 import MapScreen from '@/screens/MapScreen';
 import MyPlotsScreen from '@/screens/MyPlotsScreen';
+import FavoritesScreen from '@/screens/FavoritesScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import AuthScreen from '@/screens/AuthScreen';
 
@@ -107,6 +108,16 @@ export default function App() {
             }}
           >
             {() => session ? <MyPlotsScreen lang={lang} /> : <AuthScreen lang={lang} />}
+          </Tabs.Screen>
+
+          <Tabs.Screen
+            name="Favorites"
+            options={{
+              title: t(lang, 'tab_favorites'),
+              tabBarIcon: ({ focused }) => <TabIcon label={t(lang, 'tab_favorites')} focused={focused} />,
+            }}
+          >
+            {() => session ? <FavoritesScreen lang={lang} /> : <AuthScreen lang={lang} />}
           </Tabs.Screen>
 
           <Tabs.Screen

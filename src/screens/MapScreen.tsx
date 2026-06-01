@@ -33,8 +33,9 @@ import {
   type MapPressEvent,
 } from 'react-native-maps';
 import { supabase } from '@/lib/supabase';
-import { fetchActivePlots, type Plot } from '@/data/plots';
+import { fetchActivePlotsResult, incrementViewCount, type Plot } from '@/data/plots';
 import { centroid, geodesicArea, type LatLng } from '@/lib/geometry';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, spacing } from '@/lib/theme';
 import { t, type Lang } from '@/lib/i18n';
 import CreatePlotForm from '@/screens/CreatePlotForm';
@@ -85,8 +86,10 @@ type Props = {
 };
 
 export default function MapScreen({ lang }: Props) {
+  const insets = useSafeAreaInsets();
   const [plots, setPlots] = useState<Plot[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [selected, setSelected] = useState<Plot | null>(null);
 
   // Drawing state
@@ -101,6 +104,10 @@ export default function MapScreen({ lang }: Props) {
   const [showFilters, setShowFilters] = useState(false);
 
   const mapRef = useRef<MapView>(null);
+
+  // Track zoom level so we can hide polygons when zoomed out (huge perf win)
+  const [zoomLevel, setZoomLevel] = useState(7);
+  const POLYGON_VISIBLE_ZOOM = 12;
 
   // Bottom FAB ("Add land") entrance animation
   const fabIn = useSharedValue(80);
@@ -148,8 +155,9 @@ export default function MapScreen({ lang }: Props) {
   // Load plots
   const loadPlots = useCallback(async () => {
     setLoading(true);
-    const list = await fetchActivePlots();
-    setPlots(list);
+    const { plots: list, ok } = await fetchActivePlotsResult();
+    setLoadError(!ok);
+    if (ok) setPlots(list);
     setLoading(false);
   }, []);
   useEffect(() => {
@@ -160,7 +168,9 @@ export default function MapScreen({ lang }: Props) {
   const onSelectPlot = useCallback(
     (p: Plot) => {
       if (drawing) return;
-      setSelected(p);
+      // Optimistically show +1 and record the view (fire-and-forget).
+      setSelected({ ...p, view_count: (p.view_count ?? 0) + 1 });
+      incrementViewCount(p.id);
       const [lat, lng] = centroid(p.coords);
       mapRef.current?.animateToRegion(
         {
@@ -184,10 +194,29 @@ export default function MapScreen({ lang }: Props) {
     setSelected(null);
   };
 
+  // Convert latitudeDelta to a rough zoom level (Google Maps formula).
+  // Called whenever the user pans/zooms.
+  const onRegionChange = (region: { latitudeDelta: number }) => {
+    const z = Math.log2(360 / region.latitudeDelta);
+    // Only update state if it crosses the polygon-visibility threshold
+    // (avoids re-render on every micro pan)
+    const next = Math.round(z);
+    if (
+      (next >= POLYGON_VISIBLE_ZOOM) !== (zoomLevel >= POLYGON_VISIBLE_ZOOM)
+    ) {
+      setZoomLevel(next);
+    }
+  };
+
+  // Fractional zoom — Google Maps natively supports fractional zoom levels;
+  // we use 0.6 increments for buttons (feels smoother than integer +1/-1)
+  // and a longer 350ms ease so the camera glides instead of snapping.
   const zoomBy = (factor: number) => {
     mapRef.current?.getCamera().then(cam => {
-      const next = (cam.zoom ?? 12) + factor;
-      mapRef.current?.animateCamera({ zoom: next }, { duration: 250 });
+      const current = cam.zoom ?? 12;
+      const step = 0.6 * factor;
+      const next = Math.max(3, Math.min(20, current + step));
+      mapRef.current?.animateCamera({ zoom: next }, { duration: 350 });
     });
   };
 
@@ -254,26 +283,28 @@ export default function MapScreen({ lang }: Props) {
   };
 
   // Map renderables (memo-ed for perf)
-  const polygons = useMemo(
-    () =>
-      filteredPlots
-        .filter(p => Array.isArray(p.coords) && p.coords.length >= 3)
-        .map(p => (
-          <Polygon
-            key={`poly-${p.id}`}
-            coordinates={p.coords.map(([lat, lng]) => ({
-              latitude: lat,
-              longitude: lng,
-            }))}
-            strokeColor={colors.brand}
-            strokeWidth={2}
-            fillColor="rgba(184, 84, 50, 0.18)"
-            tappable={!drawing}
-            onPress={() => onSelectPlot(p)}
-          />
-        )),
-    [filteredPlots, drawing, onSelectPlot],
-  );
+  // Polygons are HEAVY -- only render them when the user is zoomed in close
+  // enough to actually see plot boundaries (>= zoom 12). Below that, the
+  // marker clusters are the only thing visible.
+  const polygons = useMemo(() => {
+    if (zoomLevel < POLYGON_VISIBLE_ZOOM) return null;
+    return filteredPlots
+      .filter(p => Array.isArray(p.coords) && p.coords.length >= 3)
+      .map(p => (
+        <Polygon
+          key={`poly-${p.id}`}
+          coordinates={p.coords.map(([lat, lng]) => ({
+            latitude: lat,
+            longitude: lng,
+          }))}
+          strokeColor={colors.brand}
+          strokeWidth={2}
+          fillColor="rgba(184, 84, 50, 0.18)"
+          tappable={!drawing}
+          onPress={() => onSelectPlot(p)}
+        />
+      ));
+  }, [filteredPlots, drawing, onSelectPlot, zoomLevel]);
 
   const drawingPolygon = useMemo(() => {
     if (!drawing || drawnCoords.length < 2) return null;
@@ -347,9 +378,27 @@ export default function MapScreen({ lang }: Props) {
         style={StyleSheet.absoluteFillObject}
         provider={PROVIDER_GOOGLE}
         mapType="hybrid"
-        customMapStyle={DARK_MAP_STYLE}
+        // customMapStyle removed: hybrid satellite imagery hides the style
+        // anyway, and it was costing ~30% render time per frame.
         initialRegion={SYRIA_REGION}
         onPress={onMapPress}
+        onRegionChangeComplete={onRegionChange}
+        // -- Gestures: enable all natural map interactions
+        zoomEnabled
+        scrollEnabled
+        rotateEnabled
+        pitchEnabled
+        // We use our own + / − FABs, so hide the built-in zoom widget
+        zoomControlEnabled={false}
+        // Double-tap to zoom in fractionally
+        zoomTapEnabled
+        // Fractional zoom range (Google Maps default behavior; just widen
+        // the bounds so users can zoom way out for clusters + way in for plots)
+        minZoomLevel={3}
+        maxZoomLevel={20}
+        // Map perf
+        loadingEnabled
+        moveOnMarkerPress={false}
         showsUserLocation={false}
         showsMyLocationButton={false}
         toolbarEnabled={false}
@@ -390,6 +439,16 @@ export default function MapScreen({ lang }: Props) {
         />
       )}
 
+      {/* Load-error banner (offline / server error) with retry */}
+      {loadError && !drawing && (
+        <View style={[s.errorBanner, { top: TOP_INSET + 70 }]}>
+          <Text style={s.errorText}>{t(lang, 'load_failed')}</Text>
+          <TouchableOpacity style={s.retryBtn} onPress={loadPlots}>
+            <Text style={s.retryText}>{t(lang, 'retry')}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Right-side FAB stack (hidden during drawing) */}
       {!drawing && (
         <MapFabStack
@@ -401,7 +460,10 @@ export default function MapScreen({ lang }: Props) {
 
       {/* "Add land" bottom FAB (hidden during drawing + when sheet open) */}
       {!drawing && !selected && (
-        <Animated.View style={[s.fabWrap, fabStyle]} pointerEvents="box-none">
+        <Animated.View
+          style={[s.fabWrap, { bottom: spacing.xl + insets.bottom + 16 }, fabStyle]}
+          pointerEvents="box-none"
+        >
           <TouchableOpacity style={s.fab} onPress={startDrawing}>
             <Text style={s.fabPlus}>+</Text>
             <Text style={s.fabLabel}>{t(lang, 'add_land')}</Text>
@@ -475,6 +537,30 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(12,17,16,.35)',
     zIndex: 5,
   },
+
+  errorBanner: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.danger,
+    borderRadius: radii.md,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    zIndex: 6,
+    elevation: 6,
+  },
+  errorText: { color: '#fff', fontSize: 13, fontWeight: '600', flex: 1 },
+  retryBtn: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: radii.pill,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    marginLeft: 10,
+  },
+  retryText: { color: '#fff', fontSize: 12, fontWeight: '800' },
 
   // Marker pill
   pill: {

@@ -197,6 +197,7 @@ C:\Dev\ardmap\
 │   │   ├── LegalScreen.tsx           # Privacy + Terms reader
 │   │   ├── AuthScreen.tsx            # Sign in / sign up
 │   │   ├── MyPlotsScreen.tsx         # User's own listings (edit/delete)
+│   │   ├── FavoritesScreen.tsx       # Saved/favorited plots (Favorites tab)
 │   │   └── ProfileScreen.tsx         # Account + verification + delete
 │   └── App.tsx                       # Root, bottom tabs, NavigationContainer
 │
@@ -263,6 +264,15 @@ updated_at    timestamptz
 Trigger `on_auth_user_created` on `auth.users` runs `handle_new_user()` to
 auto-insert a profile row when a new user signs up.
 
+#### `favorites` (added 2026-05-31)
+```
+user_id     uuid (FK → auth.users.id ON DELETE CASCADE)
+plot_id     uuid (FK → plots.id ON DELETE CASCADE)
+created_at  timestamptz
+PRIMARY KEY (user_id, plot_id)
+```
+RLS: each user can select/insert/delete only their own rows (`auth.uid() = user_id`).
+
 ### Storage buckets
 - `plot-images` (public) — holds uploaded plot photos.
   - Path convention: `<owner_id>/<timestamp>-<random>.<ext>`
@@ -286,6 +296,12 @@ auto-insert a profile row when a new user signs up.
   owner can update/delete own.
 - `storage.objects` (`plot-images`): authenticated upload, public select,
   owner delete.
+
+### Functions (RPC)
+- `delete_my_account()` — SECURITY DEFINER, deletes caller's plots/profile/auth row.
+- `increment_view_count(p_id uuid)` — SECURITY DEFINER, atomically bumps
+  `plots.view_count`. Granted to anon + authenticated. Added 2026-05-31 so the
+  view counter is real instead of always 0.
 
 ### To verify a seller manually (until admin panel exists)
 ```sql
@@ -321,6 +337,9 @@ WHERE id = '<USER_ID from auth.users>';
 | 19 | Report listing flow (6 reasons + optional note → `reports` table) | ✅ |
 | 20 | Account deletion (typed-confirm modal → `delete_my_account()` RPC) | ✅ |
 | 21 | Map overhaul: edge-to-edge + marker clustering + Reanimated v3 + split components | ✅ |
+| 22 | View counter wired (increment on opening plot detail) | ✅ |
+| 23 | Favorites persistence (heart button saves to `favorites` table) | ✅ |
+| 24 | Favorites tab + screen (list saved plots, remove) | ✅ |
 
 ---
 
@@ -441,16 +460,20 @@ cd C:\Dev\ardmap\android
 
 Output: `C:\Dev\ardmap\android\app\build\outputs\apk\release\app-release.apk`
 
-Currently signed with the **debug keystore** — fine for sharing with
-testers, **not OK for Play Store**. Before Play Store launch, generate a
-proper keystore:
-```powershell
-cd C:\Dev\ardmap\android\app
-keytool -genkeypair -v -storetype PKCS12 -keystore donum-release.keystore -alias donum -keyalg RSA -keysize 2048 -validity 10000
-```
-Then update `signingConfigs` in `app/build.gradle` and **back up that
-keystore forever** — losing it means losing the ability to update the
-Play Store listing.
+**Release signing (set up 2026-05-31):** the app is now signed with a real
+production keystore `android/app/donum-release.keystore` (alias `donum`,
+RSA 2048, valid to 2053, CN=Youssef Al Ali). The keystore is git-ignored
+(`*.keystore` in `android/.gitignore`). Passwords live in
+`~/.gradle/gradle.properties` (NOT in the repo) as `DONUM_STORE_FILE`,
+`DONUM_STORE_PASSWORD`, `DONUM_KEY_ALIAS`, `DONUM_KEY_PASSWORD`.
+`app/build.gradle` `signingConfigs.release` reads them and falls back to
+debug signing if they're absent. Release cert SHA-1:
+`83:47:16:AD:AF:91:B3:85:B8:8D:21:F4:AF:2B:C1:62:AF:BC:EE:5A` (registered
+on the Google Maps key alongside the debug SHA-1).
+
+⚠️ **BACK UP the keystore + passwords forever** — losing them means losing
+the ability to update the Play Store listing. They are NOT in git, so back
+them up somewhere safe manually.
 
 ---
 
@@ -465,6 +488,7 @@ Play Store listing.
 | `water_source NULL violation` | Column is boolean not text | Send `!!p.water_source \|\| !!p.water` |
 | Camera button does nothing | Android 6+ runtime permission denied | Use `PermissionsAndroid.request(CAMERA)` (we added this) |
 | Public IP in wireless adb pairing fails | Phone hotspot exposes cellular IP | Use USB cable instead |
+| Top search bar / filter button overlap the system status bar | `StatusBar.currentHeight` unreliable with translucent edge-to-edge status bar | Use `useSafeAreaInsets().top` (react-native-safe-area-context) in `MapTopBar`; FAB lifted by `insets.bottom` in `MapScreen` |
 
 ---
 
@@ -475,6 +499,11 @@ The repo is **private**, so the following secrets live inside the code
 
 - `SUPABASE_URL` + `SUPABASE_ANON_KEY` → `src/lib/env.ts`
 - Google Maps API key → `android/app/src/main/AndroidManifest.xml`
+  - **Restricted (2026-05-31):** Application restriction = Android apps
+    (`com.ardmap` + debug SHA-1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`),
+    API restriction = **Maps SDK for Android only**. Even if extracted from
+    the APK the key is useless elsewhere. ⚠️ When a real release keystore is
+    created, add its SHA-1 here too.
 - Admin WhatsApp number for verification → `src/screens/ProfileScreen.tsx`
   (`VERIFY_WHATSAPP` constant — **change `963999999999` to your real
   number**)
@@ -508,6 +537,15 @@ The repo is **private**, so the following secrets live inside the code
 | Reanimated v3 replaces Animated API everywhere | 2026-05-31 | Smoother, runs on UI thread, future-proof |
 | Added subtle dark customMapStyle | 2026-05-31 | Minimalist look fits brand earth-tones; subtle enough not to hide satellite imagery |
 | Locked `profiles` table + added `public_profiles` view | 2026-05-31 | `profiles` had two public "read all" SELECT policies that leaked every user's `phone` and admin flags via the anon key. Dropped them, restricted SELECT to own row, and exposed only `id, name, is_verified` through a view that both clients now read. Verified: anon sees 0 base rows, 7 view rows. |
+| Restricted Google Maps API key | 2026-05-31 | Key shipped unrestricted in the APK (anyone could extract + abuse billing). Locked to Android apps (`com.ardmap` + SHA-1) and to "Maps SDK for Android" only. Both debug (`5E:8F:…`) and release (`83:47:…`) SHA-1s registered. |
+| Real release keystore + signing config | 2026-05-31 | Release was signed with the debug keystore (can't ship to Play Store). Generated `donum-release.keystore`, wired `signingConfigs.release` to read passwords from `~/.gradle/gradle.properties` (kept out of git). Verified release APK now carries the production cert. |
+| Softened Investment Calculator wording | 2026-05-31 | ROI/projection figures come from static made-up growth rates; presenting them as confident predictions is a legal/reputational risk. Reworded i18n (AR/EN/DE): `projected_value` → "illustrative estimate", `annual_growth` → "assumed growth", and strengthened `investment_disclaimer` to state it is NOT a prediction or financial advice. No logic change. |
+| Wired the view counter | 2026-05-31 | `view_count` existed but was never incremented (fake metric). Added `increment_view_count` RPC; `MapScreen.onSelectPlot` calls it (fire-and-forget) and optimistically shows +1. Section 7 item 12 partially done — counter live, seller analytics still pending. |
+| Persisted favorites | 2026-05-31 | Heart button was UI-only state. Added `favorites` table + RLS; `fetchIsFavorited`/`setFavorite` in `data/plots.ts`; `PlotDetailSheet` loads state on open and persists toggles (optimistic, reverts on error). Section 7 item 10 partly done — persistence live, price-drop alerts still pending. |
+| Favorites tab + screen | 2026-05-31 | Added `FavoritesScreen.tsx` + a "Favorites" bottom tab (signed-in only, else AuthScreen) + `fetchMyFavorites()`. Lists saved plots (most recent first) with a remove action. New i18n keys `tab_favorites`/`no_favorites_yet`/`remove_favorite` (AR/EN/DE). |
+| Map load-error banner | 2026-05-31 | `fetchActivePlots` silently returned `[]` on failure, so offline/server errors looked like "no plots". Added `fetchActivePlotsResult()` (returns `{plots, ok}`); `MapScreen` shows a red banner + Retry when `ok` is false. New i18n keys `load_failed`/`retry` (AR/EN/DE). Partial progress on section 7 item 13 (empty/error states). |
+| Re-skin to Slate × Coral theme | 2026-05-31 | Replaced the earth-tone palette in `lib/theme.ts` with a dark blue-gray (slate) base + vibrant coral (#FF6B57) accent + emerald (#00E676) success, pure-white headings, muted silver text, and larger radii (md 14 / lg 18 / xl 24). All screens reskin automatically since every component reads from `colors`/`radii`. No per-component edits. |
+| Fixed top safe-area overlap + RTL search icon | 2026-05-31 | Top bar overlapped the status bar on edge-to-edge devices. Switched `MapTopBar` to `useSafeAreaInsets().top`, lifted the "add land" FAB by `insets.bottom` (keeps Google logo clear), and flipped the search magnifier to the right in Arabic (RTL). |
 
 ---
 

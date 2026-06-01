@@ -64,7 +64,7 @@ const DISTRICTS = [
 ];
 
 const USES = ['residential', 'agricultural', 'commercial', 'industrial'];
-const CURRENCIES = ['USD', 'EUR', 'TRY', 'SYP'];
+const CURRENCIES = ['USD', 'EUR', 'SYP'];
 
 export default function CreatePlotForm({
   visible,

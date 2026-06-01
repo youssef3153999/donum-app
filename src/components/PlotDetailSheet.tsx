@@ -23,7 +23,7 @@ import Animated, {
 import { colors, radii, spacing } from '@/lib/theme';
 import { t, type Lang } from '@/lib/i18n';
 import { fmtArea, formatPriceCompact, geodesicArea } from '@/lib/geometry';
-import { type Plot } from '@/data/plots';
+import { type Plot, fetchIsFavorited, setFavorite } from '@/data/plots';
 import InvestmentCalculator from '@/screens/InvestmentCalculator';
 import ReportSheet from '@/screens/ReportSheet';
 
@@ -47,6 +47,24 @@ export default function PlotDetailSheet({ plot, lang, onClose }: Props) {
   const slide = useSharedValue(1); // 1 = off-screen, 0 = visible
   const [activeImg, setActiveImg] = useState(0);
   const [favorited, setFavorited] = useState(false);
+
+  // Load persisted favorite state for this plot.
+  useEffect(() => {
+    let cancelled = false;
+    fetchIsFavorited(plot.id).then(fav => {
+      if (!cancelled) setFavorited(fav);
+    });
+    return () => { cancelled = true; };
+  }, [plot.id]);
+
+  // Toggle + persist; revert the UI if the write fails.
+  const onToggleFavorite = () => {
+    const next = !favorited;
+    setFavorited(next); // optimistic
+    setFavorite(plot.id, next).then(r => {
+      if (!r.ok) setFavorited(!next);
+    });
+  };
   const [showCalc, setShowCalc] = useState(false);
   const [showReport, setShowReport] = useState(false);
 
@@ -193,7 +211,7 @@ export default function PlotDetailSheet({ plot, lang, onClose }: Props) {
               <Text style={s.iconCircleText}>↗</Text>
             </Pressable>
             <Pressable
-              onPress={() => setFavorited(v => !v)}
+              onPress={onToggleFavorite}
               hitSlop={12}
               style={[s.iconCircle, { marginLeft: 8 }]}
             >
