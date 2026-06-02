@@ -12,6 +12,10 @@ import MyPlotsScreen from '@/screens/MyPlotsScreen';
 import FavoritesScreen from '@/screens/FavoritesScreen';
 import ProfileScreen from '@/screens/ProfileScreen';
 import AuthScreen from '@/screens/AuthScreen';
+import { Sentry, initSentry } from '@/lib/sentry';
+
+// Initialise crash reporting as early as possible (before the app renders).
+initSentry();
 
 const Tabs = createBottomTabNavigator();
 
@@ -29,7 +33,7 @@ function TabIcon({ label, focused }: { label: string; focused: boolean }) {
   );
 }
 
-export default function App() {
+function App() {
   const [lang, setLang] = useState<Lang>('ar');
   const [session, setSession] = useState<Session | null>(null);
   const [ready, setReady] = useState(false);
@@ -141,3 +145,6 @@ export default function App() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
 });
+
+// Wrap the root component so Sentry can capture render errors + touch events.
+export default Sentry.wrap(App);

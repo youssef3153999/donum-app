@@ -1,6 +1,6 @@
 # DONUM — Master Project Documentation
 
-> **Last updated:** 2026-05-31
+> **Last updated:** 2026-06-02
 > **Owner:** Youssef Al Ali (`youssefalali91@gmail.com`)
 > **Collaborator:** Ghaith
 > **Read this file daily** to know where the project stands.
@@ -178,6 +178,7 @@ C:\Dev\ardmap\
 │   │   ├── geometry.ts               # polygon area calc, formatters
 │   │   ├── districts.ts              # District keys + coordinates + search
 │   │   ├── marketEstimates.ts        # Growth rates for investment calculator
+│   │   ├── sentry.ts                 # Sentry init (crash reporting) + DSN
 │   │   └── uploadImage.ts            # Upload helper for plot photos
 │   ├── data\
 │   │   └── plots.ts                  # fetchActivePlots, fetchMyPlots,
@@ -341,6 +342,7 @@ WHERE id = '<USER_ID from auth.users>';
 | 22 | View counter wired (increment on opening plot detail) | ✅ |
 | 23 | Favorites persistence (heart button saves to `favorites` table) | ✅ |
 | 24 | Favorites tab + screen (list saved plots, remove) | ✅ |
+| 25 | Sentry crash reporting (manual wire, pinned 5.33.1) | ✅ |
 
 ---
 
@@ -363,8 +365,12 @@ will pick up from there. Numbering matches the 25-item list given on
    header opens `ReportSheet` with 6 reasons + optional note. Reports go
    to `public.reports` table. Admin moderation queue still TODO (will
    come with the admin panel).
-5. **Sentry crash reporting.** Wire `@sentry/react-native`. Without this we
-   can't know what's breaking for users.
+5. ~~**Sentry crash reporting.**~~ ✅ Done 2026-06-02. Wired
+   `@sentry/react-native@5.33.1` (pinned — NOT the wizard's latest 6.x).
+   `initSentry()` in `src/lib/sentry.ts` is called at the top of `App.tsx`;
+   root exported via `Sentry.wrap(App)`. Crash-only (`tracesSampleRate: 0`)
+   to stay on the free plan. DSN is the EU public ingest key (safe in client).
+   Still TODO: source-maps upload for readable release stack traces.
 6. ~~**Privacy policy + Terms of service**~~ ✅ Done 2026-05-26. In-app
    `LegalScreen` (Modal) accessed from Profile screen. Three languages.
    Content embedded so it works offline. Still TODO: mirror the same
@@ -547,6 +553,7 @@ The repo is **private**, so the following secrets live inside the code
 | Map load-error banner | 2026-05-31 | `fetchActivePlots` silently returned `[]` on failure, so offline/server errors looked like "no plots". Added `fetchActivePlotsResult()` (returns `{plots, ok}`); `MapScreen` shows a red banner + Retry when `ok` is false. New i18n keys `load_failed`/`retry` (AR/EN/DE). Partial progress on section 7 item 13 (empty/error states). |
 | Re-skin to Slate × Coral theme | 2026-05-31 | Replaced the earth-tone palette in `lib/theme.ts` with a dark blue-gray (slate) base + vibrant coral (#FF6B57) accent + emerald (#00E676) success, pure-white headings, muted silver text, and larger radii (md 14 / lg 18 / xl 24). All screens reskin automatically since every component reads from `colors`/`radii`. No per-component edits. |
 | Fixed top safe-area overlap + RTL search icon | 2026-05-31 | Top bar overlapped the status bar on edge-to-edge devices. Switched `MapTopBar` to `useSafeAreaInsets().top`, lifted the "add land" FAB by `insets.bottom` (keeps Google logo clear), and flipped the search magnifier to the right in Arabic (RTL). |
+| Sentry wired manually, not via wizard | 2026-06-02 | The Sentry onboarding wizard installs `@sentry/react-native@latest` (6.x) and patches native build files. That would override our pinned 5.33.1 (chosen for RN 0.75.4) and risk breaking the build. Instead we pinned 5.33.1 and wired it by hand: `src/lib/sentry.ts` + two lines in `App.tsx`. Crash-only (`tracesSampleRate: 0`) to stay on the free plan. Source-maps upload deferred. DSN stored in `DONUM_ACCOUNTS.txt` (git-ignored). |
 | Drawing tutorial (coach overlay) | 2026-05-31 | Testers didn't understand how to draw plot boundaries. Added `DrawHelpOverlay` (3 steps) shown the first time a user starts drawing (persisted via AsyncStorage `donum_draw_help_seen`), plus a "?" button in `DrawingToolbar` to reopen. New i18n keys `draw_help_*` (AR/EN/DE). Restricted release build to arm ABIs + raised Gradle heap to 3072m. Partial progress on section 7 item 14 (onboarding). |
 
 ---
