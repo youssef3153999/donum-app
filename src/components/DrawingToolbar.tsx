@@ -17,6 +17,7 @@ type Props = {
   onCancel: () => void;
   onUndo: () => void;
   onFinish: () => void;
+  onHelp?: () => void;
 };
 
 /**
@@ -30,6 +31,7 @@ export default function DrawingToolbar({
   onCancel,
   onUndo,
   onFinish,
+  onHelp,
 }: Props) {
   const inY = useSharedValue(1); // 1 = off-screen
 
@@ -49,11 +51,18 @@ export default function DrawingToolbar({
   return (
     <>
       <Animated.View style={[s.banner, { top: TOP_INSET + 8 }, topStyle]}>
-        <Text style={s.bannerText}>{t(lang, 'draw_hint')}</Text>
-        <Text style={s.bannerCount}>
-          {drawnCoords.length} •{' '}
-          {enoughPoints ? fmtArea(geodesicArea(drawnCoords)) : '—'}
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={s.bannerText}>{t(lang, 'draw_hint')}</Text>
+          <Text style={s.bannerCount}>
+            {drawnCoords.length} •{' '}
+            {enoughPoints ? fmtArea(geodesicArea(drawnCoords)) : '—'}
+          </Text>
+        </View>
+        {onHelp && (
+          <TouchableOpacity style={s.helpBtn} onPress={onHelp} hitSlop={8}>
+            <Text style={s.helpText}>؟</Text>
+          </TouchableOpacity>
+        )}
       </Animated.View>
 
       <Animated.View style={[s.bar, bottomStyle]}>
@@ -83,7 +92,10 @@ const s = StyleSheet.create({
   banner: {
     position: 'absolute',
     left: spacing.md,
-    right: 70,
+    right: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     backgroundColor: colors.panel,
     borderColor: colors.border,
     borderWidth: 1,
@@ -96,6 +108,15 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     zIndex: 10,
   },
+  helpBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  helpText: { color: '#fff', fontWeight: '900', fontSize: 16 },
   bannerText: { color: colors.text, fontWeight: '600', fontSize: 13 },
   bannerCount: {
     color: colors.accent,

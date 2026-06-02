@@ -186,7 +186,8 @@ C:\Dev\ardmap\
 │   ├── components\                   # Map sub-components (split 2026-05-31)
 │   │   ├── MapTopBar.tsx             # Floating search + filter button
 │   │   ├── MapFabStack.tsx           # Zoom + locate-me FABs (right side)
-│   │   ├── DrawingToolbar.tsx        # Top banner + bottom cancel/undo/finish
+│   │   ├── DrawingToolbar.tsx        # Top banner + bottom cancel/undo/finish (+ "?" help)
+│   │   ├── DrawHelpOverlay.tsx       # First-time drawing tutorial (3 steps)
 │   │   └── PlotDetailSheet.tsx       # Bottom sheet with hero + actions
 │   ├── screens\
 │   │   ├── MapScreen.tsx             # Map orchestrator (uses /components)
@@ -546,6 +547,7 @@ The repo is **private**, so the following secrets live inside the code
 | Map load-error banner | 2026-05-31 | `fetchActivePlots` silently returned `[]` on failure, so offline/server errors looked like "no plots". Added `fetchActivePlotsResult()` (returns `{plots, ok}`); `MapScreen` shows a red banner + Retry when `ok` is false. New i18n keys `load_failed`/`retry` (AR/EN/DE). Partial progress on section 7 item 13 (empty/error states). |
 | Re-skin to Slate × Coral theme | 2026-05-31 | Replaced the earth-tone palette in `lib/theme.ts` with a dark blue-gray (slate) base + vibrant coral (#FF6B57) accent + emerald (#00E676) success, pure-white headings, muted silver text, and larger radii (md 14 / lg 18 / xl 24). All screens reskin automatically since every component reads from `colors`/`radii`. No per-component edits. |
 | Fixed top safe-area overlap + RTL search icon | 2026-05-31 | Top bar overlapped the status bar on edge-to-edge devices. Switched `MapTopBar` to `useSafeAreaInsets().top`, lifted the "add land" FAB by `insets.bottom` (keeps Google logo clear), and flipped the search magnifier to the right in Arabic (RTL). |
+| Drawing tutorial (coach overlay) | 2026-05-31 | Testers didn't understand how to draw plot boundaries. Added `DrawHelpOverlay` (3 steps) shown the first time a user starts drawing (persisted via AsyncStorage `donum_draw_help_seen`), plus a "?" button in `DrawingToolbar` to reopen. New i18n keys `draw_help_*` (AR/EN/DE). Restricted release build to arm ABIs + raised Gradle heap to 3072m. Partial progress on section 7 item 14 (onboarding). |
 
 ---
 

@@ -52,7 +52,9 @@ import {
 import MapTopBar from '@/components/MapTopBar';
 import MapFabStack from '@/components/MapFabStack';
 import DrawingToolbar from '@/components/DrawingToolbar';
+import DrawHelpOverlay from '@/components/DrawHelpOverlay';
 import PlotDetailSheet from '@/components/PlotDetailSheet';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SYRIA_REGION = {
   latitude: 35.0,
@@ -90,6 +92,7 @@ export default function MapScreen({ lang }: Props) {
   const [plots, setPlots] = useState<Plot[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [showDrawHelp, setShowDrawHelp] = useState(false);
   const [selected, setSelected] = useState<Plot | null>(null);
 
   // Drawing state
@@ -261,6 +264,12 @@ export default function MapScreen({ lang }: Props) {
     setSelected(null);
     setDrawnCoords([]);
     setDrawing(true);
+    // Show the drawing tutorial the first time only.
+    const seen = await AsyncStorage.getItem('donum_draw_help_seen');
+    if (!seen) {
+      setShowDrawHelp(true);
+      AsyncStorage.setItem('donum_draw_help_seen', '1');
+    }
   };
   const cancelDrawing = () => {
     setDrawing(false);
@@ -479,6 +488,7 @@ export default function MapScreen({ lang }: Props) {
           onCancel={cancelDrawing}
           onUndo={undoLast}
           onFinish={finishDrawing}
+          onHelp={() => setShowDrawHelp(true)}
         />
       )}
 
@@ -511,6 +521,13 @@ export default function MapScreen({ lang }: Props) {
         resultsCount={filteredPlots.length}
         onClose={() => setShowFilters(false)}
         onApply={setFilters}
+      />
+
+      {/* First-time drawing tutorial */}
+      <DrawHelpOverlay
+        visible={showDrawHelp}
+        lang={lang}
+        onClose={() => setShowDrawHelp(false)}
       />
     </View>
   );
