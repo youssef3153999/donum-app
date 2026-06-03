@@ -31,6 +31,7 @@ import MapView from 'react-native-map-clustering';
 import {
   Marker,
   Polygon,
+  Polyline,
   PROVIDER_GOOGLE,
   type MapPressEvent,
 } from 'react-native-maps';
@@ -109,8 +110,11 @@ export default function MapScreen({ lang }: Props) {
   const [drawing, setDrawing] = useState(false);
   const [drawnCoords, setDrawnCoords] = useState<LatLng[]>([]);
   // Points removed via Undo, kept so Redo can restore them. Cleared whenever a
-  // new point is added or a vertex is dragged (the future diverges).
+  // new point is added or a vertex is moved (the future diverges).
   const [redoStack, setRedoStack] = useState<LatLng[]>([]);
+  // Index of the vertex currently selected for moving (tap a corner to select,
+  // then tap the map to move it — no long-press needed). null = adding points.
+  const [selectedVertex, setSelectedVertex] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [pendingCoords, setPendingCoords] = useState<LatLng[]>([]);
 
@@ -218,17 +222,25 @@ export default function MapScreen({ lang }: Props) {
   const onMapPress = (e: MapPressEvent) => {
     if (drawing) {
       const { latitude, longitude } = e.nativeEvent.coordinate;
+      // If a vertex is selected, a map tap MOVES it (instant, no long-press).
+      if (selectedVertex !== null) {
+        Vibration.vibrate(10);
+        setDrawnCoords(prev =>
+          prev.map((c, i) => (i === selectedVertex ? [latitude, longitude] : c)),
+        );
+        setRedoStack([]);
+        return;
+      }
       addPoint(latitude, longitude);
       return;
     }
     setSelected(null);
   };
 
-  // Drag a placed vertex to a new spot. Diverges the timeline → clear redo.
-  const onCornerDragEnd = (index: number, lat: number, lng: number) => {
+  // Tap a corner to select it for moving; tap it again to deselect.
+  const selectVertex = (index: number) => {
     Vibration.vibrate(10);
-    setDrawnCoords(prev => prev.map((c, i) => (i === index ? [lat, lng] : c)));
-    setRedoStack([]);
+    setSelectedVertex(prev => (prev === index ? null : index));
   };
 
   // Convert latitudeDelta to a rough zoom level (Google Maps formula).
@@ -339,6 +351,7 @@ export default function MapScreen({ lang }: Props) {
     setSelected(null);
     setDrawnCoords([]);
     setRedoStack([]);
+    setSelectedVertex(null);
     setDrawing(true);
     // Center the map on the seller's current location (best-effort).
     goToMyLocation();
@@ -353,14 +366,17 @@ export default function MapScreen({ lang }: Props) {
     setDrawing(false);
     setDrawnCoords([]);
     setRedoStack([]);
+    setSelectedVertex(null);
   };
   // Undo pops the last point onto the redo stack; Redo pushes it back.
-  const undoLast = () =>
+  const undoLast = () => {
+    setSelectedVertex(null);
     setDrawnCoords(prev => {
       if (prev.length === 0) return prev;
       setRedoStack(r => [...r, prev[prev.length - 1]]);
       return prev.slice(0, -1);
     });
+  };
   const redoLast = () =>
     setRedoStack(prev => {
       if (prev.length === 0) return prev;
@@ -368,6 +384,12 @@ export default function MapScreen({ lang }: Props) {
       setDrawnCoords(c => [...c, point]);
       return prev.slice(0, -1);
     });
+  // Clear All: wipe every point but stay in drawing mode (unlike Cancel).
+  const clearAll = () => {
+    setDrawnCoords([]);
+    setRedoStack([]);
+    setSelectedVertex(null);
+  };
   const finishDrawing = () => {
     if (drawnCoords.length < 3) {
       Alert.alert('!', t(lang, 'draw_min_points'));
@@ -407,48 +429,65 @@ export default function MapScreen({ lang }: Props) {
       ));
   }, [filteredPlots, drawing, onSelectPlot, zoomLevel]);
 
-  const drawingPolygon = useMemo(() => {
+  // Open path through the points (each edge as a Polyline) — shown from 2
+  // points. The closing edge is NOT drawn here; it appears only once the
+  // Polygon (≥3 points) renders, so the shape "closes" only when valid.
+  const drawingPolyline = useMemo(() => {
     if (!drawing || drawnCoords.length < 2) return null;
+    return (
+      <Polyline
+        coordinates={drawnCoords.map(([lat, lng]) => ({
+          latitude: lat,
+          longitude: lng,
+        }))}
+        strokeColor="#00C853"
+        strokeWidth={3}
+      />
+    );
+  }, [drawing, drawnCoords]);
+
+  const drawingPolygon = useMemo(() => {
+    if (!drawing || drawnCoords.length < 3) return null;
     return (
       <Polygon
         coordinates={drawnCoords.map(([lat, lng]) => ({
           latitude: lat,
           longitude: lng,
         }))}
-        strokeColor={colors.accent}
+        strokeColor="#00C853"
         strokeWidth={3}
-        fillColor="rgba(200, 151, 91, 0.25)"
+        fillColor="rgba(0, 255, 0, 0.4)"
       />
     );
   }, [drawing, drawnCoords]);
 
   const drawingCorners = useMemo(() => {
     if (!drawing) return null;
-    return drawnCoords.map(([lat, lng], i) => (
-      <Marker
-        key={`corner-${i}`}
-        identifier={`corner-${i}`}
-        coordinate={{ latitude: lat, longitude: lng }}
-        anchor={{ x: 0.5, y: 0.5 }}
-        cluster={false}
-        // A grabbable, clearly-visible handle so the finger doesn't hide the
-        // exact spot, and a wide hitbox so it's easy to grab on a phone.
-        draggable
-        onDragEnd={e => {
-          const { latitude, longitude } = e.nativeEvent.coordinate;
-          onCornerDragEnd(i, latitude, longitude);
-        }}
-        tracksViewChanges={false}
-        zIndex={20}
-      >
-        <View style={s.cornerHandle}>
-          <View style={s.cornerDot}>
-            <Text style={s.cornerText}>{i + 1}</Text>
+    return drawnCoords.map(([lat, lng], i) => {
+      const sel = selectedVertex === i;
+      return (
+        <Marker
+          // Key includes selection so the custom view remounts and shows the
+          // highlight (Android won't repaint a marker with tracksViewChanges
+          // off otherwise).
+          key={`corner-${i}-${sel ? 'sel' : 'n'}`}
+          coordinate={{ latitude: lat, longitude: lng }}
+          anchor={{ x: 0.5, y: 0.5 }}
+          cluster={false}
+          // Tap to select (then tap the map to move it) — no long-press.
+          onPress={() => selectVertex(i)}
+          tracksViewChanges={false}
+          zIndex={sel ? 30 : 20}
+        >
+          <View style={[s.cornerHandle, sel && s.cornerHandleSel]}>
+            <View style={[s.cornerDot, sel && s.cornerDotSel]}>
+              <Text style={s.cornerText}>{i + 1}</Text>
+            </View>
           </View>
-        </View>
-      </Marker>
-    ));
-  }, [drawing, drawnCoords, onCornerDragEnd]);
+        </Marker>
+      );
+    });
+  }, [drawing, drawnCoords, selectedVertex]);
 
   // Small labels at each edge midpoint showing that segment's length, plus
   // the live perimeter is surfaced in the toolbar banner. Helps the seller
@@ -470,7 +509,7 @@ export default function MapScreen({ lang }: Props) {
     }
     return edges.map(ed => (
       <Marker
-        key={ed.key}
+        key={`${ed.key}-${Math.round(ed.len)}`}
         coordinate={{ latitude: ed.mid[0], longitude: ed.mid[1] }}
         anchor={{ x: 0.5, y: 0.5 }}
         cluster={false}
@@ -561,6 +600,7 @@ export default function MapScreen({ lang }: Props) {
       >
         {polygons}
         {!drawing && markers}
+        {drawingPolyline}
         {drawingPolygon}
         {edgeLabels}
         {drawingCorners}
@@ -629,6 +669,8 @@ export default function MapScreen({ lang }: Props) {
           onUndo={undoLast}
           onRedo={redoLast}
           canRedo={redoStack.length > 0}
+          onClearAll={clearAll}
+          moving={selectedVertex !== null}
           onFinish={finishDrawing}
           onHelp={() => setShowDrawHelp(true)}
         />
@@ -768,6 +810,21 @@ const s = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 1 },
+  },
+  // Selected vertex: bigger ring + emerald dot so it's obvious it's "armed".
+  cornerHandleSel: {
+    backgroundColor: 'rgba(0,200,83,0.25)',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  cornerDotSel: {
+    backgroundColor: '#00C853',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderColor: '#fff',
+    borderWidth: 3,
   },
   edgeLabel: {
     backgroundColor: 'rgba(26,29,35,0.82)',

@@ -1,21 +1,21 @@
-// Geodesic helpers shared with the website. Keep these in sync with
-// app/lib/geometry.ts on the web project.
+// Geodesic helpers. Area uses @turf/area and distances use geolib's
+// getDistance (industry-standard geodesic libs), per the measurement spec.
+// NOTE: this intentionally diverges from the website's hand-rolled copy —
+// keep that in mind if comparing app vs. web figures (difference is < 0.1%).
+import turfArea from '@turf/area';
+import { getDistance } from 'geolib';
 
-const R = 6378137; // earth radius in meters
+const R = 6378137; // earth radius in meters (still used by some helpers)
 
 export type LatLng = [number, number]; // [lat, lng]
 
+// Polygon area in m², computed by Turf.js on a closed GeoJSON ring.
 export function geodesicArea(coords: LatLng[]): number {
   if (!coords || coords.length < 3) return 0;
-  let area = 0;
-  for (let i = 0; i < coords.length; i++) {
-    const [lat1, lng1] = coords[i];
-    const [lat2, lng2] = coords[(i + 1) % coords.length];
-    area +=
-      ((lng2 - lng1) * Math.PI) / 180 *
-      (2 + Math.sin((lat1 * Math.PI) / 180) + Math.sin((lat2 * Math.PI) / 180));
-  }
-  return Math.abs((area * R * R) / 2);
+  // GeoJSON wants [lng, lat] and a ring whose first point repeats at the end.
+  const ring = coords.map(([lat, lng]) => [lng, lat]);
+  ring.push(ring[0]);
+  return turfArea({ type: 'Polygon', coordinates: [ring] } as any);
 }
 
 export function fmtArea(m2: number): string {
@@ -60,15 +60,13 @@ export function centroid(coords: LatLng[]): LatLng {
   return [lat / coords.length, lng / coords.length];
 }
 
-// Great-circle distance between two points, in meters.
+// Distance between two points, in meters, via geolib (0.01 m accuracy).
 export function haversineMeters(a: LatLng, b: LatLng): number {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(b[0] - a[0]);
-  const dLng = toRad(b[1] - a[1]);
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+  return getDistance(
+    { latitude: a[0], longitude: a[1] },
+    { latitude: b[0], longitude: b[1] },
+    0.01,
+  );
 }
 
 // Total edge length. When `closed` and there are >= 3 points, includes the

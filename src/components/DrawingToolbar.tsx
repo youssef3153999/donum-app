@@ -18,6 +18,8 @@ type Props = {
   onUndo: () => void;
   onRedo: () => void;
   canRedo: boolean;
+  onClearAll: () => void;
+  moving: boolean;
   onFinish: () => void;
   onHelp?: () => void;
 };
@@ -34,6 +36,8 @@ export default function DrawingToolbar({
   onUndo,
   onRedo,
   canRedo,
+  onClearAll,
+  moving,
   onFinish,
   onHelp,
 }: Props) {
@@ -57,7 +61,9 @@ export default function DrawingToolbar({
     <>
       <Animated.View style={[s.banner, { top: TOP_INSET + 8 }, topStyle]}>
         <View style={{ flex: 1 }}>
-          <Text style={s.bannerText}>{t(lang, 'draw_hint')}</Text>
+          <Text style={[s.bannerText, moving && s.bannerTextMove]}>
+            {t(lang, moving ? 'move_hint' : 'draw_hint')}
+          </Text>
           {enoughPoints ? (
             <>
               <Text style={s.bannerArea}>
@@ -79,6 +85,11 @@ export default function DrawingToolbar({
             </Text>
           )}
         </View>
+        {drawnCoords.length > 0 && (
+          <TouchableOpacity style={s.clearBtn} onPress={onClearAll} hitSlop={8}>
+            <Text style={s.clearText}>{t(lang, 'clear')}</Text>
+          </TouchableOpacity>
+        )}
         {onHelp && (
           <TouchableOpacity style={s.helpBtn} onPress={onHelp} hitSlop={8}>
             <Text style={s.helpText}>؟</Text>
@@ -145,7 +156,19 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   helpText: { color: '#fff', fontWeight: '900', fontSize: 16 },
+  clearBtn: {
+    height: 30,
+    paddingHorizontal: 12,
+    borderRadius: 15,
+    backgroundColor: colors.panel2,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearText: { color: colors.danger, fontWeight: '700', fontSize: 12 },
   bannerText: { color: colors.text, fontWeight: '600', fontSize: 13 },
+  bannerTextMove: { color: '#00C853', fontWeight: '800' },
   bannerArea: {
     color: colors.accent,
     fontWeight: '800',
