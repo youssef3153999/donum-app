@@ -224,6 +224,17 @@ export default function CreatePlotForm({
       Alert.alert(t(lang, 'app_title'), t(lang, 'invalid_price'));
       return;
     }
+    // Validate phone format if provided (optional field). Accepts an optional
+    // leading + and 7–15 digits; spaces, dashes and brackets are ignored so
+    // diaspora numbers (DE/TR/Gulf) and local Syrian numbers both pass.
+    const phoneTrim = phone.trim();
+    if (phoneTrim) {
+      const cleaned = phoneTrim.replace(/[\s\-()]/g, '');
+      if (!/^\+?[0-9]{7,15}$/.test(cleaned)) {
+        Alert.alert(t(lang, 'app_title'), t(lang, 'invalid_phone'));
+        return;
+      }
+    }
     setSaving(true);
 
     // Upload photos first (if any) so URLs can be saved with the plot

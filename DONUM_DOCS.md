@@ -298,6 +298,10 @@ RLS: each user can select/insert/delete only their own rows (`auth.uid() = user_
   owner can update/delete own.
 - `storage.objects` (`plot-images`): authenticated upload, public select,
   owner delete.
+- `reports`: INSERT is **authenticated-only** with `auth.uid() = reporter_id`
+  (hardened 2026-06-03 — the wide-open "Anyone can report" policy that let the
+  raw anon key flood the queue, plus the `reporter_id IS NULL` loophole, were
+  dropped). Reporter reads own rows only.
 
 ### Functions (RPC)
 - `delete_my_account()` — SECURITY DEFINER, deletes caller's plots/profile/auth row.
@@ -560,6 +564,8 @@ The repo is **private**, so the following secrets live inside the code
 | Drawing tutorial (coach overlay) | 2026-05-31 | Testers didn't understand how to draw plot boundaries. Added `DrawHelpOverlay` (3 steps) shown the first time a user starts drawing (persisted via AsyncStorage `donum_draw_help_seen`), plus a "?" button in `DrawingToolbar` to reopen. New i18n keys `draw_help_*` (AR/EN/DE). Restricted release build to arm ABIs + raised Gradle heap to 3072m. Partial progress on section 7 item 14 (onboarding). |
 | Switched from dark Slate theme to a **light × coral** theme | 2026-06-03 | Youssef found the dark slate palette gloomy. Rewrote `lib/theme.ts` to light surfaces (`bg #F5F6F8`, `panel #FFFFFF`, `panel2 #EEF0F3`, `text #1A1D23`, `muted #6B7480`), kept coral brand, darkened `ok` to `#12B76A` so it reads on white. All screens reskin automatically (every component reads from `colors`). Flipped `NavigationContainer` theme `dark:false` and both StatusBars to `dark-content`. Supersedes the 2026-05-31 "Slate × Coral" row. |
 | Redesigned bottom tab bar (Voi-style) + swapped tab order | 2026-06-03 | Tabs were text-only labels. Replaced with white bar (h 68) showing an SVG glyph + label per tab. Icons drawn inline with `react-native-svg` (already a dep) instead of wiring `react-native-vector-icons` fonts — zero new linking risk. New `TabItem` component + `ICON_PATHS` in `App.tsx`. Swapped **Map (الخريطة)** to last and **Profile (حسابي)** to first per Youssef; added `initialRouteName="Map"` so the app still opens map-first despite the reorder. Touches Tier 3 item 15 (real icons) partially — tab bar now has real icons, in-screen emoji icons still pending. |
+| Hardened `reports` INSERT with RLS (closed the 2026-06-02 TODO) | 2026-06-03 | The client guard in `reportPlot()` was bypassable with the raw anon key. Applied migration `harden_reports_insert_rls`: dropped the open "Anyone can report" (`with_check true`, all roles) and the loose authenticated policy (`auth.uid()=reporter_id OR reporter_id IS NULL`); recreated a single strict policy — `to authenticated with check (auth.uid() = reporter_id)`. Verified: only one INSERT policy remains. Anon can no longer insert; null reporter_id is rejected. |
+| Phone-number format validation in create form | 2026-06-03 | `CreatePlotForm.submit` now validates the phone (when provided) against `/^\+?[0-9]{7,15}$/` after stripping spaces/dashes/brackets, so diaspora (DE/TR/Gulf) and local Syrian numbers pass while junk is rejected. New i18n key `invalid_phone` (AR/EN/DE). Kept the field optional (no required-ness change). Sign-up is email/password only — no phone field there, so nothing to validate on auth. |
 
 ---
 

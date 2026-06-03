@@ -52,9 +52,12 @@ question in this project (see "Update protocol" at the bottom).
 - [ ] Fix any crash Sentry reports during testing
 - [ ] **Create Google Play Developer account + start identity verification**
       (DO THIS FIRST — verification is the long pole)
-- [ ] Apply RLS INSERT policy on the `reports` table (real anti-spam — app
-      guard alone is bypassable)
-- [ ] Add phone-number validation (regex) in the create/sign-up forms
+- [x] Apply RLS INSERT policy on the `reports` table (real anti-spam — app
+      guard alone is bypassable) — done 2026-06-03, dropped the open "Anyone
+      can report" policy; insert now authenticated-only `auth.uid()=reporter_id`
+- [x] Add phone-number validation (regex) in the create form — done 2026-06-03
+      (`CreatePlotForm.submit`, accepts `+` & 7–15 digits). Sign-up is
+      email/password only, no phone field, so nothing to add there.
 - [ ] Distribute APK to 3–5 trusted testers (direct)
 - [ ] Mirror Privacy Policy + Terms to public website URLs (`/privacy`,
       `/terms`) — required for Play and good practice for the APK too
