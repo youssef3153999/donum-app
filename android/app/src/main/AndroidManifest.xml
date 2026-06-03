@@ -10,6 +10,13 @@
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
+    <!-- Center the map on the seller's location when adding a plot -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Short haptic feedback while drawing plot corners -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <application
       android:name=".MainApplication"
       android:label="@string/app_name"

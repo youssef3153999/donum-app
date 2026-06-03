@@ -24,6 +24,19 @@ export function fmtArea(m2: number): string {
   return Math.round(m2) + ' m²';
 }
 
+// Dunam ("دونم") is the common land unit in Syria/Levant: 1 dunam = 1000 m².
+export const M2_PER_DONUM = 1000;
+
+// Format an area as a dunam figure (unit label is added by the caller via
+// i18n, since it differs per language).
+export function fmtDonum(m2: number): string {
+  if (!Number.isFinite(m2) || m2 <= 0) return '0';
+  const d = m2 / M2_PER_DONUM;
+  if (d >= 100) return Math.round(d).toString();
+  if (d >= 10) return d.toFixed(1);
+  return d.toFixed(2);
+}
+
 export function formatPrice(value: number, currency: string): string {
   const symbol =
     currency === 'USD' ? '$' :

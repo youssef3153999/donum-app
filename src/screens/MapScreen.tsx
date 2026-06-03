@@ -17,6 +17,7 @@ import {
   Platform,
   StatusBar,
   Vibration,
+  PermissionsAndroid,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -119,6 +120,12 @@ export default function MapScreen({ lang }: Props) {
   const [showFilters, setShowFilters] = useState(false);
 
   const mapRef = useRef<MapView>(null);
+
+  // Latest known device location (from the map's user-location stream) and a
+  // flag set when "add land" is pressed before a GPS fix has arrived yet.
+  const userLocRef = useRef<LatLng | null>(null);
+  const pendingLocateRef = useRef(false);
+  const [locEnabled, setLocEnabled] = useState(false);
 
   // Track zoom level so we can hide polygons when zoomed out (huge perf win)
   const [zoomLevel, setZoomLevel] = useState(7);
@@ -279,6 +286,47 @@ export default function MapScreen({ lang }: Props) {
     setFilters(EMPTY_FILTERS);
   };
 
+  // Keep the latest device position; if "add land" was pressed before the
+  // first fix arrived, recenter as soon as it does.
+  const onUserLocation = (e: any) => {
+    const c = e?.nativeEvent?.coordinate;
+    if (!c || typeof c.latitude !== 'number') return;
+    userLocRef.current = [c.latitude, c.longitude];
+    if (pendingLocateRef.current) {
+      pendingLocateRef.current = false;
+      mapRef.current?.animateCamera(
+        { center: { latitude: c.latitude, longitude: c.longitude }, zoom: 18 },
+        { duration: 700 },
+      );
+    }
+  };
+
+  // Ask for location permission and move the camera to the seller's spot so
+  // they can draw their own plot right where they're standing.
+  const goToMyLocation = async () => {
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      {
+        title: t(lang, 'loc_perm_title'),
+        message: t(lang, 'loc_perm_msg'),
+        buttonPositive: t(lang, 'ok'),
+        buttonNegative: t(lang, 'cancel'),
+      },
+    );
+    if (granted !== PermissionsAndroid.RESULTS.GRANTED) return;
+    setLocEnabled(true); // shows the blue dot + starts the location stream
+    if (userLocRef.current) {
+      const [la, ln] = userLocRef.current;
+      mapRef.current?.animateCamera(
+        { center: { latitude: la, longitude: ln }, zoom: 18 },
+        { duration: 700 },
+      );
+    } else {
+      // No fix yet — recenter on the first one that arrives.
+      pendingLocateRef.current = true;
+    }
+  };
+
   // Drawing
   const startDrawing = async () => {
     const {
@@ -292,6 +340,8 @@ export default function MapScreen({ lang }: Props) {
     setDrawnCoords([]);
     setRedoStack([]);
     setDrawing(true);
+    // Center the map on the seller's current location (best-effort).
+    goToMyLocation();
     // Show the drawing tutorial the first time only.
     const seen = await AsyncStorage.getItem('donum_draw_help_seen');
     if (!seen) {
@@ -496,7 +546,8 @@ export default function MapScreen({ lang }: Props) {
         // Map perf
         loadingEnabled
         moveOnMarkerPress={false}
-        showsUserLocation={false}
+        showsUserLocation={locEnabled}
+        onUserLocationChange={onUserLocation}
         showsMyLocationButton={false}
         toolbarEnabled={false}
         // Clustering options

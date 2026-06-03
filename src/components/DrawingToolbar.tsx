@@ -7,7 +7,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { colors, radii, spacing } from '@/lib/theme';
 import { t, type Lang } from '@/lib/i18n';
-import { fmtArea, geodesicArea, perimeter, fmtLen, type LatLng } from '@/lib/geometry';
+import { geodesicArea, perimeter, fmtLen, fmtDonum, type LatLng } from '@/lib/geometry';
 
 const TOP_INSET = Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 44;
 
@@ -51,19 +51,33 @@ export default function DrawingToolbar({
   }));
 
   const enoughPoints = drawnCoords.length >= 3;
+  const area = enoughPoints ? geodesicArea(drawnCoords) : 0;
 
   return (
     <>
       <Animated.View style={[s.banner, { top: TOP_INSET + 8 }, topStyle]}>
         <View style={{ flex: 1 }}>
           <Text style={s.bannerText}>{t(lang, 'draw_hint')}</Text>
-          <Text style={s.bannerCount}>
-            {drawnCoords.length} •{' '}
-            {enoughPoints ? fmtArea(geodesicArea(drawnCoords)) : '—'}
-            {drawnCoords.length >= 2
-              ? ` · ${fmtLen(perimeter(drawnCoords, enoughPoints))}`
-              : ''}
-          </Text>
+          {enoughPoints ? (
+            <>
+              <Text style={s.bannerArea}>
+                {fmtDonum(area)} {t(lang, 'unit_donum')}
+                <Text style={s.bannerAreaSub}>
+                  {'  ·  '}{Math.round(area)} {t(lang, 'unit_m2')}
+                </Text>
+              </Text>
+              <Text style={s.bannerCount}>
+                {drawnCoords.length} • {fmtLen(perimeter(drawnCoords, true))}
+              </Text>
+            </>
+          ) : (
+            <Text style={s.bannerCount}>
+              {drawnCoords.length} •{' '}
+              {drawnCoords.length >= 2
+                ? fmtLen(perimeter(drawnCoords, false))
+                : '—'}
+            </Text>
+          )}
         </View>
         {onHelp && (
           <TouchableOpacity style={s.helpBtn} onPress={onHelp} hitSlop={8}>
@@ -132,11 +146,22 @@ const s = StyleSheet.create({
   },
   helpText: { color: '#fff', fontWeight: '900', fontSize: 16 },
   bannerText: { color: colors.text, fontWeight: '600', fontSize: 13 },
-  bannerCount: {
+  bannerArea: {
     color: colors.accent,
+    fontWeight: '800',
+    fontSize: 18,
+    marginTop: 4,
+  },
+  bannerAreaSub: {
+    color: colors.muted,
     fontWeight: '700',
     fontSize: 12,
-    marginTop: 4,
+  },
+  bannerCount: {
+    color: colors.muted,
+    fontWeight: '700',
+    fontSize: 12,
+    marginTop: 2,
   },
 
   bar: {
