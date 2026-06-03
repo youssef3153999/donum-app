@@ -25,7 +25,7 @@ import { createPlot, updatePlot, type Plot } from '@/data/plots';
 import { uploadPlotImages } from '@/lib/uploadImage';
 import { supabase } from '@/lib/supabase';
 import type { LatLng } from '@/lib/geometry';
-import { fmtArea, geodesicArea } from '@/lib/geometry';
+import { fmtArea, geodesicArea, fmtDonum } from '@/lib/geometry';
 import { colors, radii, spacing } from '@/lib/theme';
 import { t, type Lang } from '@/lib/i18n';
 
@@ -99,6 +99,15 @@ export default function CreatePlotForm({
   const [showMore, setShowMore] = useState(isEdit); // expand by default in edit
   const [photos, setPhotos] = useState<Asset[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  // Editable area (m²). Defaults to the value computed from the polygon, but
+  // the seller can override it by hand (e.g. an official deed figure).
+  const [areaInput, setAreaInput] = useState(() => {
+    const base =
+      isEdit && existingPlot?.area_m2
+        ? existingPlot.area_m2
+        : geodesicArea(effectiveCoords);
+    return String(Math.round(base));
+  });
 
   // Re-sync state when opening with a different plot
   useEffect(() => {
@@ -114,12 +123,27 @@ export default function CreatePlotForm({
       setElectricity(!!existingPlot.electricity);
       setWater(!!existingPlot.water);
       setRoad(!!existingPlot.road);
+      setAreaInput(
+        String(Math.round(existingPlot.area_m2 ?? geodesicArea(existingPlot.coords))),
+      );
       setShowMore(true);
       setPhotos([]); // newly picked photos only -- existing URLs preserved separately
     }
   }, [visible, existingPlot, lang]);
 
+  // For a fresh plot, reset the area field to the freshly drawn polygon's value
+  // each time the form opens.
+  useEffect(() => {
+    if (visible && !existingPlot) {
+      setAreaInput(String(Math.round(geodesicArea(coords))));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
   const area = geodesicArea(effectiveCoords);
+  const areaTyped = Math.round(Number(areaInput));
+  const finalArea =
+    Number.isFinite(areaTyped) && areaTyped > 0 ? areaTyped : Math.round(area);
 
   const remaining = MAX_PHOTOS - photos.length;
 
@@ -276,6 +300,7 @@ export default function CreatePlotForm({
         water,
         water_source: water,
         road,
+        area_m2: finalArea,
         images: finalImages,
       });
       result = r;
@@ -288,7 +313,7 @@ export default function CreatePlotForm({
         currency,
         phone: phone || undefined,
         desc: description ? { ar: description } : undefined,
-        area_m2: Math.round(area),
+        area_m2: finalArea,
         electricity,
         water,
         water_source: water ? (waterSource || '') : '',
@@ -349,11 +374,32 @@ export default function CreatePlotForm({
             </View>
           )}
 
-          <Row label={`${t(lang, 'filter_area')}: ${fmtArea(area)}`}>
-            <Text style={s.areaNote}>
-              {coords.length} {coords.length === 1 ? 'point' : 'points'}
-            </Text>
-          </Row>
+          <Field label={t(lang, 'filter_area')}>
+            <View style={s.priceRow}>
+              <TextInput
+                style={[s.input, { flex: 1 }]}
+                value={areaInput}
+                onChangeText={setAreaInput}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={colors.muted}
+              />
+              <Text style={s.areaUnit}>{t(lang, 'unit_m2')}</Text>
+            </View>
+            <View style={s.areaMetaRow}>
+              <Text style={s.areaNote}>
+                {fmtDonum(finalArea)} {t(lang, 'unit_donum')}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setAreaInput(String(Math.round(area)))}
+                hitSlop={8}
+              >
+                <Text style={s.areaReset}>
+                  {t(lang, 'area_auto')}: {fmtArea(area)} ↺
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Field>
 
           <Field label={t(lang, 'field_district')}>
             <Chips
@@ -651,6 +697,14 @@ const s = StyleSheet.create({
   },
   rowLabel: { color: colors.text, fontSize: 14, fontWeight: '600' },
   areaNote: { color: colors.muted, fontSize: 13 },
+  areaUnit: { color: colors.muted, fontSize: 14, fontWeight: '700', paddingHorizontal: 4 },
+  areaMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  areaReset: { color: colors.accent, fontSize: 12, fontWeight: '700' },
 
   field: { gap: 8 },
   fieldLabel: {
