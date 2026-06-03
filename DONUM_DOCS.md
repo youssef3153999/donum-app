@@ -175,7 +175,7 @@ C:\Dev\ardmap\
 │   │   ├── supabase.ts               # Supabase client with AsyncStorage
 │   │   ├── theme.ts                  # Earth-tone colors, radii, spacing
 │   │   ├── i18n.ts                   # AR/DE/EN dictionaries
-│   │   ├── geometry.ts               # polygon area calc, formatters
+│   │   ├── geometry.ts               # area, perimeter, haversine, midpoint, formatters
 │   │   ├── districts.ts              # District keys + coordinates + search
 │   │   ├── marketEstimates.ts        # Growth rates for investment calculator
 │   │   ├── sentry.ts                 # Sentry init (crash reporting) + DSN
@@ -348,6 +348,7 @@ WHERE id = '<USER_ID from auth.users>';
 | 24 | Favorites tab + screen (list saved plots, remove) | ✅ |
 | 25 | Sentry crash reporting (manual wire, pinned 5.33.1) | ✅ |
 | 26 | Light theme re-skin + redesigned bottom tab bar (SVG icons + labels, swapped Map/Profile order) | ✅ |
+| 27 | Drawing UX: draggable vertices, undo+redo, edge-length labels + live perimeter, haptic on placement | ✅ |
 
 ---
 
@@ -565,6 +566,7 @@ The repo is **private**, so the following secrets live inside the code
 | Switched from dark Slate theme to a **light × coral** theme | 2026-06-03 | Youssef found the dark slate palette gloomy. Rewrote `lib/theme.ts` to light surfaces (`bg #F5F6F8`, `panel #FFFFFF`, `panel2 #EEF0F3`, `text #1A1D23`, `muted #6B7480`), kept coral brand, darkened `ok` to `#12B76A` so it reads on white. All screens reskin automatically (every component reads from `colors`). Flipped `NavigationContainer` theme `dark:false` and both StatusBars to `dark-content`. Supersedes the 2026-05-31 "Slate × Coral" row. |
 | Redesigned bottom tab bar (Voi-style) + swapped tab order | 2026-06-03 | Tabs were text-only labels. Replaced with white bar (h 68) showing an SVG glyph + label per tab. Icons drawn inline with `react-native-svg` (already a dep) instead of wiring `react-native-vector-icons` fonts — zero new linking risk. New `TabItem` component + `ICON_PATHS` in `App.tsx`. Swapped **Map (الخريطة)** to last and **Profile (حسابي)** to first per Youssef; added `initialRouteName="Map"` so the app still opens map-first despite the reorder. Touches Tier 3 item 15 (real icons) partially — tab bar now has real icons, in-screen emoji icons still pending. |
 | Hardened `reports` INSERT with RLS (closed the 2026-06-02 TODO) | 2026-06-03 | The client guard in `reportPlot()` was bypassable with the raw anon key. Applied migration `harden_reports_insert_rls`: dropped the open "Anyone can report" (`with_check true`, all roles) and the loose authenticated policy (`auth.uid()=reporter_id OR reporter_id IS NULL`); recreated a single strict policy — `to authenticated with check (auth.uid() = reporter_id)`. Verified: only one INSERT policy remains. Anon can no longer insert; null reporter_id is rejected. |
+| Drawing UX overhaul — draggable vertices + redo + edge metrics | 2026-06-03 | Drawing was tap-only with no edit-after-place (fat-finger problem on phones). Made each in-progress corner a `draggable` `Marker` with `onDragEnd` → `onCornerDragEnd(i,…)` (wide 44px transparent hitbox + high-contrast dot so the finger doesn't hide the target). Added a redo stack (`redoStack` state; `undoLast` pushes onto it, `redoLast` pops back, cleared on add/drag) and a Redo button in `DrawingToolbar`. Added per-edge length labels at segment midpoints + live perimeter in the banner (new geometry helpers `haversineMeters`, `perimeter`, `midpoint`, `fmtLen`). Short `Vibration.vibrate(10)` haptic on each point/drag. All drawing markers set `cluster={false}` so the map's clustering doesn't swallow them. New i18n key `redo` (AR/EN/DE). NOTE: couldn't run `tsc` in this env (the Linux mount served stale/truncated copies of the host files) — verified edits by reading the host files directly; relying on the Windows build to compile. |
 | Phone-number format validation in create form | 2026-06-03 | `CreatePlotForm.submit` now validates the phone (when provided) against `/^\+?[0-9]{7,15}$/` after stripping spaces/dashes/brackets, so diaspora (DE/TR/Gulf) and local Syrian numbers pass while junk is rejected. New i18n key `invalid_phone` (AR/EN/DE). Kept the field optional (no required-ness change). Sign-up is email/password only — no phone field there, so nothing to validate on auth. |
 
 ---

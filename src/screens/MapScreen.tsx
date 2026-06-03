@@ -16,6 +16,7 @@ import {
   Keyboard,
   Platform,
   StatusBar,
+  Vibration,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -34,7 +35,15 @@ import {
 } from 'react-native-maps';
 import { supabase } from '@/lib/supabase';
 import { fetchActivePlotsResult, incrementViewCount, type Plot } from '@/data/plots';
-import { centroid, geodesicArea, type LatLng } from '@/lib/geometry';
+import {
+  centroid,
+  geodesicArea,
+  haversineMeters,
+  perimeter,
+  midpoint,
+  fmtLen,
+  type LatLng,
+} from '@/lib/geometry';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, spacing } from '@/lib/theme';
 import { t, type Lang } from '@/lib/i18n';
@@ -98,6 +107,9 @@ export default function MapScreen({ lang }: Props) {
   // Drawing state
   const [drawing, setDrawing] = useState(false);
   const [drawnCoords, setDrawnCoords] = useState<LatLng[]>([]);
+  // Points removed via Undo, kept so Redo can restore them. Cleared whenever a
+  // new point is added or a vertex is dragged (the future diverges).
+  const [redoStack, setRedoStack] = useState<LatLng[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [pendingCoords, setPendingCoords] = useState<LatLng[]>([]);
 
@@ -188,13 +200,28 @@ export default function MapScreen({ lang }: Props) {
     [drawing],
   );
 
+  // Append a corner: short haptic confirmation + clear the redo history
+  // (adding a point makes any "redo" path obsolete).
+  const addPoint = (lat: number, lng: number) => {
+    Vibration.vibrate(10);
+    setDrawnCoords(prev => [...prev, [lat, lng]]);
+    setRedoStack([]);
+  };
+
   const onMapPress = (e: MapPressEvent) => {
     if (drawing) {
       const { latitude, longitude } = e.nativeEvent.coordinate;
-      setDrawnCoords(prev => [...prev, [latitude, longitude]]);
+      addPoint(latitude, longitude);
       return;
     }
     setSelected(null);
+  };
+
+  // Drag a placed vertex to a new spot. Diverges the timeline → clear redo.
+  const onCornerDragEnd = (index: number, lat: number, lng: number) => {
+    Vibration.vibrate(10);
+    setDrawnCoords(prev => prev.map((c, i) => (i === index ? [lat, lng] : c)));
+    setRedoStack([]);
   };
 
   // Convert latitudeDelta to a rough zoom level (Google Maps formula).
@@ -263,6 +290,7 @@ export default function MapScreen({ lang }: Props) {
     }
     setSelected(null);
     setDrawnCoords([]);
+    setRedoStack([]);
     setDrawing(true);
     // Show the drawing tutorial the first time only.
     const seen = await AsyncStorage.getItem('donum_draw_help_seen');
@@ -274,8 +302,22 @@ export default function MapScreen({ lang }: Props) {
   const cancelDrawing = () => {
     setDrawing(false);
     setDrawnCoords([]);
+    setRedoStack([]);
   };
-  const undoLast = () => setDrawnCoords(prev => prev.slice(0, -1));
+  // Undo pops the last point onto the redo stack; Redo pushes it back.
+  const undoLast = () =>
+    setDrawnCoords(prev => {
+      if (prev.length === 0) return prev;
+      setRedoStack(r => [...r, prev[prev.length - 1]]);
+      return prev.slice(0, -1);
+    });
+  const redoLast = () =>
+    setRedoStack(prev => {
+      if (prev.length === 0) return prev;
+      const point = prev[prev.length - 1];
+      setDrawnCoords(c => [...c, point]);
+      return prev.slice(0, -1);
+    });
   const finishDrawing = () => {
     if (drawnCoords.length < 3) {
       Alert.alert('!', t(lang, 'draw_min_points'));
@@ -335,12 +377,58 @@ export default function MapScreen({ lang }: Props) {
     return drawnCoords.map(([lat, lng], i) => (
       <Marker
         key={`corner-${i}`}
+        identifier={`corner-${i}`}
         coordinate={{ latitude: lat, longitude: lng }}
         anchor={{ x: 0.5, y: 0.5 }}
+        cluster={false}
+        // A grabbable, clearly-visible handle so the finger doesn't hide the
+        // exact spot, and a wide hitbox so it's easy to grab on a phone.
+        draggable
+        onDragEnd={e => {
+          const { latitude, longitude } = e.nativeEvent.coordinate;
+          onCornerDragEnd(i, latitude, longitude);
+        }}
         tracksViewChanges={false}
+        zIndex={20}
       >
-        <View style={s.corner}>
-          <Text style={s.cornerText}>{i + 1}</Text>
+        <View style={s.cornerHandle}>
+          <View style={s.cornerDot}>
+            <Text style={s.cornerText}>{i + 1}</Text>
+          </View>
+        </View>
+      </Marker>
+    ));
+  }, [drawing, drawnCoords, onCornerDragEnd]);
+
+  // Small labels at each edge midpoint showing that segment's length, plus
+  // the live perimeter is surfaced in the toolbar banner. Helps the seller
+  // match known plot dimensions while drawing.
+  const edgeLabels = useMemo(() => {
+    if (!drawing || drawnCoords.length < 2) return null;
+    const edges: { mid: LatLng; len: number; key: string }[] = [];
+    for (let i = 0; i < drawnCoords.length - 1; i++) {
+      edges.push({
+        mid: midpoint(drawnCoords[i], drawnCoords[i + 1]),
+        len: haversineMeters(drawnCoords[i], drawnCoords[i + 1]),
+        key: `edge-${i}`,
+      });
+    }
+    if (drawnCoords.length >= 3) {
+      const a = drawnCoords[drawnCoords.length - 1];
+      const b = drawnCoords[0];
+      edges.push({ mid: midpoint(a, b), len: haversineMeters(a, b), key: 'edge-close' });
+    }
+    return edges.map(ed => (
+      <Marker
+        key={ed.key}
+        coordinate={{ latitude: ed.mid[0], longitude: ed.mid[1] }}
+        anchor={{ x: 0.5, y: 0.5 }}
+        cluster={false}
+        tracksViewChanges={false}
+        zIndex={15}
+      >
+        <View style={s.edgeLabel}>
+          <Text style={s.edgeLabelText}>{fmtLen(ed.len)}</Text>
         </View>
       </Marker>
     ));
@@ -423,6 +511,7 @@ export default function MapScreen({ lang }: Props) {
         {polygons}
         {!drawing && markers}
         {drawingPolygon}
+        {edgeLabels}
         {drawingCorners}
       </MapView>
 
@@ -487,6 +576,8 @@ export default function MapScreen({ lang }: Props) {
           drawnCoords={drawnCoords}
           onCancel={cancelDrawing}
           onUndo={undoLast}
+          onRedo={redoLast}
+          canRedo={redoStack.length > 0}
           onFinish={finishDrawing}
           onHelp={() => setShowDrawHelp(true)}
         />
@@ -602,6 +693,38 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   cornerText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  // Draggable vertex: a wide transparent hitbox (easy to grab on a phone)
+  // wrapping a high-contrast dot so the target stays visible under the finger.
+  cornerHandle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,107,87,0.18)',
+  },
+  cornerDot: {
+    backgroundColor: colors.accent,
+    borderColor: '#fff',
+    borderWidth: 2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  edgeLabel: {
+    backgroundColor: 'rgba(26,29,35,0.82)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  edgeLabelText: { color: '#fff', fontSize: 10, fontWeight: '700' },
 
   // Bottom "Add land" FAB
   fabWrap: {

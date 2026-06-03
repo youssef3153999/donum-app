@@ -46,3 +46,38 @@ export function centroid(coords: LatLng[]): LatLng {
   coords.forEach(([a, b]) => { lat += a; lng += b; });
   return [lat / coords.length, lng / coords.length];
 }
+
+// Great-circle distance between two points, in meters.
+export function haversineMeters(a: LatLng, b: LatLng): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b[0] - a[0]);
+  const dLng = toRad(b[1] - a[1]);
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
+}
+
+// Total edge length. When `closed` and there are >= 3 points, includes the
+// closing segment (last → first).
+export function perimeter(coords: LatLng[], closed = true): number {
+  if (!coords || coords.length < 2) return 0;
+  let sum = 0;
+  for (let i = 0; i < coords.length - 1; i++) {
+    sum += haversineMeters(coords[i], coords[i + 1]);
+  }
+  if (closed && coords.length >= 3) {
+    sum += haversineMeters(coords[coords.length - 1], coords[0]);
+  }
+  return sum;
+}
+
+export function midpoint(a: LatLng, b: LatLng): LatLng {
+  return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+}
+
+export function fmtLen(m: number): string {
+  if (!Number.isFinite(m) || m <= 0) return '0 m';
+  if (m >= 1000) return (m / 1000).toFixed(2) + ' km';
+  return Math.round(m) + ' m';
+}

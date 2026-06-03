@@ -7,7 +7,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { colors, radii, spacing } from '@/lib/theme';
 import { t, type Lang } from '@/lib/i18n';
-import { fmtArea, geodesicArea, type LatLng } from '@/lib/geometry';
+import { fmtArea, geodesicArea, perimeter, fmtLen, type LatLng } from '@/lib/geometry';
 
 const TOP_INSET = Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 44;
 
@@ -16,6 +16,8 @@ type Props = {
   drawnCoords: LatLng[];
   onCancel: () => void;
   onUndo: () => void;
+  onRedo: () => void;
+  canRedo: boolean;
   onFinish: () => void;
   onHelp?: () => void;
 };
@@ -30,6 +32,8 @@ export default function DrawingToolbar({
   drawnCoords,
   onCancel,
   onUndo,
+  onRedo,
+  canRedo,
   onFinish,
   onHelp,
 }: Props) {
@@ -56,6 +60,9 @@ export default function DrawingToolbar({
           <Text style={s.bannerCount}>
             {drawnCoords.length} •{' '}
             {enoughPoints ? fmtArea(geodesicArea(drawnCoords)) : '—'}
+            {drawnCoords.length >= 2
+              ? ` · ${fmtLen(perimeter(drawnCoords, enoughPoints))}`
+              : ''}
           </Text>
         </View>
         {onHelp && (
@@ -70,11 +77,18 @@ export default function DrawingToolbar({
           <Text style={s.btnGhostText}>{t(lang, 'cancel')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[s.btnGhost, drawnCoords.length === 0 && s.btnDisabled]}
+          style={[s.btnGhost, s.btnCompact, drawnCoords.length === 0 && s.btnDisabled]}
           onPress={onUndo}
           disabled={drawnCoords.length === 0}
         >
           <Text style={s.btnGhostText}>{t(lang, 'undo')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.btnGhost, s.btnCompact, !canRedo && s.btnDisabled]}
+          onPress={onRedo}
+          disabled={!canRedo}
+        >
+          <Text style={s.btnGhostText}>{t(lang, 'redo')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[s.btnPrimary, !enoughPoints && s.btnDisabled]}
@@ -151,6 +165,7 @@ const s = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
+  btnCompact: { flex: 0.8 },
   btnGhostText: { color: colors.text, fontWeight: '600', fontSize: 13 },
   btnPrimary: {
     flex: 1.4,
