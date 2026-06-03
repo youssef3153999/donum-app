@@ -1,6 +1,6 @@
 # DONUM — Master Project Documentation
 
-> **Last updated:** 2026-06-02
+> **Last updated:** 2026-06-03
 > **Owner:** Youssef Al Ali (`youssefalali91@gmail.com`)
 > **Collaborator:** Ghaith
 > **Read this file daily** to know where the project stands.
@@ -496,6 +496,7 @@ them up somewhere safe manually.
 | Camera button does nothing | Android 6+ runtime permission denied | Use `PermissionsAndroid.request(CAMERA)` (we added this) |
 | Public IP in wireless adb pairing fails | Phone hotspot exposes cellular IP | Use USB cable instead |
 | Top search bar / filter button overlap the system status bar | `StatusBar.currentHeight` unreliable with translucent edge-to-edge status bar | Use `useSafeAreaInsets().top` (react-native-safe-area-context) in `MapTopBar`; FAB lifted by `insets.bottom` in `MapScreen` |
+| `UnsatisfiedLinkError: libreanimated.so` / `Cannot read property 'makeMutable' of undefined` on the **x86_64 emulator** | `gradle.properties` `reactNativeArchitectures` is arm-only (`armeabi-v7a,arm64-v8a`), so the emulator's x86_64 native libs (incl. Reanimated) aren't built | For emulator dev only, build with the override: `cd android && .\gradlew installDebug -PreactNativeArchitectures=x86_64`. Real ARM phones are unaffected — keep the release arm-only. (Found via Sentry 2026-06-03.) |
 
 ---
 
@@ -553,6 +554,7 @@ The repo is **private**, so the following secrets live inside the code
 | Map load-error banner | 2026-05-31 | `fetchActivePlots` silently returned `[]` on failure, so offline/server errors looked like "no plots". Added `fetchActivePlotsResult()` (returns `{plots, ok}`); `MapScreen` shows a red banner + Retry when `ok` is false. New i18n keys `load_failed`/`retry` (AR/EN/DE). Partial progress on section 7 item 13 (empty/error states). |
 | Re-skin to Slate × Coral theme | 2026-05-31 | Replaced the earth-tone palette in `lib/theme.ts` with a dark blue-gray (slate) base + vibrant coral (#FF6B57) accent + emerald (#00E676) success, pure-white headings, muted silver text, and larger radii (md 14 / lg 18 / xl 24). All screens reskin automatically since every component reads from `colors`/`radii`. No per-component edits. |
 | Fixed top safe-area overlap + RTL search icon | 2026-05-31 | Top bar overlapped the status bar on edge-to-edge devices. Switched `MapTopBar` to `useSafeAreaInsets().top`, lifted the "add land" FAB by `insets.bottom` (keeps Google logo clear), and flipped the search magnifier to the right in Arabic (RTL). |
+| Hardened reportPlot against anonymous spam | 2026-06-02 | `reportPlot()` inserted `reporter_id: user?.id ?? null`, so the raw anon key could flood the `reports` queue without an account. Added a data-layer guard: returns `auth_required` if no signed-in user (the UI in `ReportSheet` already blocked it, this is defense-in-depth). ⚠️ STILL TODO: add an RLS INSERT policy on `reports` (`auth.uid() = reporter_id`) — the client guard alone is bypassable. |
 | Sentry wired manually, not via wizard | 2026-06-02 | The Sentry onboarding wizard installs `@sentry/react-native@latest` (6.x) and patches native build files. That would override our pinned 5.33.1 (chosen for RN 0.75.4) and risk breaking the build. Instead we pinned 5.33.1 and wired it by hand: `src/lib/sentry.ts` + two lines in `App.tsx`. Crash-only (`tracesSampleRate: 0`) to stay on the free plan. Source-maps upload deferred. DSN stored in `DONUM_ACCOUNTS.txt` (git-ignored). |
 | Drawing tutorial (coach overlay) | 2026-05-31 | Testers didn't understand how to draw plot boundaries. Added `DrawHelpOverlay` (3 steps) shown the first time a user starts drawing (persisted via AsyncStorage `donum_draw_help_seen`), plus a "?" button in `DrawingToolbar` to reopen. New i18n keys `draw_help_*` (AR/EN/DE). Restricted release build to arm ABIs + raised Gradle heap to 3072m. Partial progress on section 7 item 14 (onboarding). |
 

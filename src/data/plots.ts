@@ -452,9 +452,13 @@ export async function reportPlot(
   note?: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const { data: { user } } = await supabase.auth.getUser();
+  // Require a signed-in user — stops anonymous flooding of the reports queue.
+  if (!user) {
+    return { ok: false, error: 'auth_required' };
+  }
   const row = {
     plot_id: plotId,
-    reporter_id: user?.id ?? null,
+    reporter_id: user.id,
     reason,
     note: note?.trim() || null,
     status: 'open',
