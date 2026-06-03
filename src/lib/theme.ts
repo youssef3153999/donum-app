@@ -1,17 +1,18 @@
-// Slate × Coral palette — dark blue-gray base, vibrant coral accent,
-// emerald success, large radii, floating-layer feel.
+// Light × Coral palette — clean white surfaces, dark readable text,
+// vibrant coral accent. Every screen reads from here, so flipping these
+// values reskins the whole app automatically.
 export const colors = {
-  bg: '#20242E', // super dark blue-gray (slate) base
-  panel: '#262C39', // headers / sheets / nav — one step lighter
-  panel2: '#2C3340', // inner cards / inputs — lighter still
-  border: '#39414F', // thin, soft slate separators
-  text: '#FFFFFF', // crisp white headings
-  muted: '#8E9AA7', // muted silver-slate secondary text
+  bg: '#F5F6F8', // soft off-white app background
+  panel: '#FFFFFF', // headers / sheets / nav bar — pure white, pops on bg
+  panel2: '#EEF0F3', // inner cards / inputs — faint gray
+  border: '#E3E7EC', // thin, soft light separators
+  text: '#1A1D23', // near-black headings / primary text
+  muted: '#6B7480', // gray secondary text
   brand: '#FF6B57', // vibrant coral — primary accent / FAB / active
   brandSoft: '#FF8472', // softer coral for prices / highlights
   accent: '#FF6B57', // focal coral (projection value, chart fill)
-  danger: '#E5484D', // distinct red (kept apart from coral)
-  ok: '#00E676', // emerald success
+  danger: '#E5484D', // distinct red
+  ok: '#12B76A', // emerald success (darkened to read on white)
   warn: '#E0A03F',
 };
 

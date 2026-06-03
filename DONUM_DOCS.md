@@ -343,6 +343,7 @@ WHERE id = '<USER_ID from auth.users>';
 | 23 | Favorites persistence (heart button saves to `favorites` table) | ✅ |
 | 24 | Favorites tab + screen (list saved plots, remove) | ✅ |
 | 25 | Sentry crash reporting (manual wire, pinned 5.33.1) | ✅ |
+| 26 | Light theme re-skin + redesigned bottom tab bar (SVG icons + labels, swapped Map/Profile order) | ✅ |
 
 ---
 
@@ -557,6 +558,8 @@ The repo is **private**, so the following secrets live inside the code
 | Hardened reportPlot against anonymous spam | 2026-06-02 | `reportPlot()` inserted `reporter_id: user?.id ?? null`, so the raw anon key could flood the `reports` queue without an account. Added a data-layer guard: returns `auth_required` if no signed-in user (the UI in `ReportSheet` already blocked it, this is defense-in-depth). ⚠️ STILL TODO: add an RLS INSERT policy on `reports` (`auth.uid() = reporter_id`) — the client guard alone is bypassable. |
 | Sentry wired manually, not via wizard | 2026-06-02 | The Sentry onboarding wizard installs `@sentry/react-native@latest` (6.x) and patches native build files. That would override our pinned 5.33.1 (chosen for RN 0.75.4) and risk breaking the build. Instead we pinned 5.33.1 and wired it by hand: `src/lib/sentry.ts` + two lines in `App.tsx`. Crash-only (`tracesSampleRate: 0`) to stay on the free plan. Source-maps upload deferred. DSN stored in `DONUM_ACCOUNTS.txt` (git-ignored). |
 | Drawing tutorial (coach overlay) | 2026-05-31 | Testers didn't understand how to draw plot boundaries. Added `DrawHelpOverlay` (3 steps) shown the first time a user starts drawing (persisted via AsyncStorage `donum_draw_help_seen`), plus a "?" button in `DrawingToolbar` to reopen. New i18n keys `draw_help_*` (AR/EN/DE). Restricted release build to arm ABIs + raised Gradle heap to 3072m. Partial progress on section 7 item 14 (onboarding). |
+| Switched from dark Slate theme to a **light × coral** theme | 2026-06-03 | Youssef found the dark slate palette gloomy. Rewrote `lib/theme.ts` to light surfaces (`bg #F5F6F8`, `panel #FFFFFF`, `panel2 #EEF0F3`, `text #1A1D23`, `muted #6B7480`), kept coral brand, darkened `ok` to `#12B76A` so it reads on white. All screens reskin automatically (every component reads from `colors`). Flipped `NavigationContainer` theme `dark:false` and both StatusBars to `dark-content`. Supersedes the 2026-05-31 "Slate × Coral" row. |
+| Redesigned bottom tab bar (Voi-style) + swapped tab order | 2026-06-03 | Tabs were text-only labels. Replaced with white bar (h 68) showing an SVG glyph + label per tab. Icons drawn inline with `react-native-svg` (already a dep) instead of wiring `react-native-vector-icons` fonts — zero new linking risk. New `TabItem` component + `ICON_PATHS` in `App.tsx`. Swapped **Map (الخريطة)** to last and **Profile (حسابي)** to first per Youssef; added `initialRouteName="Map"` so the app still opens map-first despite the reorder. Touches Tier 3 item 15 (real icons) partially — tab bar now has real icons, in-screen emoji icons still pending. |
 
 ---
 

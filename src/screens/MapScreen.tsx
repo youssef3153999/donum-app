@@ -378,7 +378,7 @@ export default function MapScreen({ lang }: Props) {
       <StatusBar
         translucent
         backgroundColor="transparent"
-        barStyle="light-content"
+        barStyle="dark-content"
       />
 
       {/* Map — full screen, behind everything */}
