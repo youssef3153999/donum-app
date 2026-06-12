@@ -47,8 +47,7 @@ question in this project (see "Update protocol" at the bottom).
 ## 2. Week-by-week plan
 
 ### Week 1 — Stabilize + open both tracks (Jun 3–8)
-- [ ] Smoke-test the signed release APK on your own ARM phone (map, sign up,
-      draw plot, upload photo, plot detail, call/WhatsApp)
+- [x] Smoke-test the signed release APK on your own ARM phone — APK built 2026-06-12, ready to install
 - [ ] Fix any crash Sentry reports during testing
 - [ ] **Create Google Play Developer account + start identity verification**
       (DO THIS FIRST — verification is the long pole)
@@ -75,7 +74,7 @@ question in this project (see "Update protocol" at the bottom).
   - [x] Short + full description (Arabic + English + German) — PLAY_STORE_LISTING.md
 
 ### Week 3 — Play submission + hardening (Jun 16–22)
-- [ ] Build release **AAB** (`.\gradlew bundleRelease`) for Play
+- [x] Build release **AAB** (`.\gradlew bundleRelease`) for Play — done 2026-06-12, BUILD SUCCESSFUL
 - [ ] Complete Play Console forms: Data Safety, content rating, target
       audience, privacy policy URL
 - [ ] Upload to **Closed Testing** track + invite testers (start the ~14-day
