@@ -353,6 +353,7 @@ WHERE id = '<USER_ID from auth.users>';
 | 27 | Drawing UX: draggable vertices, undo+redo, edge-length labels + live perimeter, haptic on placement | ✅ |
 | 28 | "Add land" recenters the map on the seller's GPS location (location permission + blue dot) | ✅ |
 | 29 | Mark plot as sold (owner action, status → 'sold', keeps price history) | ✅ |
+| 30 | Polished empty states: Favorites + My Plots (SVG icon + title + subtitle, EmptyState component) | ✅ |
 
 ---
 
@@ -404,7 +405,7 @@ will pick up from there. Numbering matches the 25-item list given on
 11. **Saved searches + new-plot notifications.** FCM push.
 12. **View counter + seller analytics** (already have `view_count` column,
     just wire it).
-13. **Polished empty states** for "no plots", "no favorites", "no internet".
+13. ~~**Polished empty states**~~ ✅ Done 2026-06-12. `EmptyState` component (SVG icon + title + subtitle) in `src/components/EmptyState.tsx`. Used in `FavoritesScreen` (heart icon) and `MyPlotsScreen` (pin icon). Map offline banner already existed. New i18n keys: `no_favorites_hint`, `no_plots_yet_hint`, `no_plots_hint`, `offline_title`, `offline_hint`.
 14. **Onboarding flow** (3-screen explainer before sign-in).
 
 ### Tier 3 — Polish

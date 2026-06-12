@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Alert,
-  Linking,
   Pressable,
   Modal,
   TextInput,
@@ -13,13 +12,10 @@ import {
 } from 'react-native';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { fetchMyProfile, deleteMyAccount, type Profile } from '@/data/plots';
+import { deleteMyAccount } from '@/data/plots';
 import { colors, radii, spacing } from '@/lib/theme';
 import { t, type Lang } from '@/lib/i18n';
 import LegalScreen, { type LegalKind } from '@/screens/LegalScreen';
-
-// WhatsApp number for verification requests (set to admin/owner number)
-const VERIFY_WHATSAPP = '963999999999';
 
 export default function ProfileScreen({
   lang,
@@ -29,29 +25,18 @@ export default function ProfileScreen({
   onLangChange: (l: Lang) => void;
 }) {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
   const [legalOpen, setLegalOpen] = useState<LegalKind | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteText, setDeleteText] = useState('');
   const [deleting, setDeleting] = useState(false);
 
-  const loadProfile = useCallback(async () => {
-    const p = await fetchMyProfile();
-    setProfile(p);
-  }, []);
-
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user ?? null);
-      if (data.user) loadProfile();
-    });
+    supabase.auth.getUser().then(({ data }) => setUser(data.user ?? null));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, sess) => {
       setUser(sess?.user ?? null);
-      if (sess?.user) loadProfile();
-      else setProfile(null);
     });
     return () => sub.subscription.unsubscribe();
-  }, [loadProfile]);
+  }, []);
 
   const signOut = () => {
     Alert.alert(t(lang, 'sign_out'), '?', [
@@ -85,17 +70,6 @@ export default function ProfileScreen({
     // onAuthStateChange will fire from signOut() and reset the UI
   };
 
-  const requestVerification = () => {
-    const msg = encodeURIComponent(
-      `${t(lang, 'how_to_verify')}\n${t(lang, 'email')}: ${user?.email ?? ''}`,
-    );
-    const url = `whatsapp://send?phone=${VERIFY_WHATSAPP}&text=${msg}`;
-    Linking.canOpenURL(url).then(supported => {
-      if (supported) Linking.openURL(url);
-      else Linking.openURL(`https://wa.me/${VERIFY_WHATSAPP}?text=${msg}`);
-    });
-  };
-
   return (
     <View style={s.root}>
       {/* Email */}
@@ -103,44 +77,6 @@ export default function ProfileScreen({
         <Text style={s.label}>{t(lang, 'email')}</Text>
         <Text style={s.value}>{user?.email ?? '—'}</Text>
       </View>
-
-      {/* Verification status */}
-      {user && profile && (
-        <View
-          style={[
-            s.section,
-            profile.is_verified ? s.sectionVerified : s.sectionNotVerified,
-          ]}
-        >
-          <View style={s.verifyHeader}>
-            <View style={s.verifyIconBox}>
-              <Text style={s.verifyIcon}>
-                {profile.is_verified ? '✓' : '!'}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.verifyTitle}>
-                {profile.is_verified
-                  ? t(lang, 'verified_seller')
-                  : t(lang, 'not_verified')}
-              </Text>
-              {!profile.is_verified && (
-                <Text style={s.verifyDesc}>{t(lang, 'verify_info')}</Text>
-              )}
-            </View>
-          </View>
-          {!profile.is_verified && (
-            <TouchableOpacity
-              style={s.verifyCta}
-              onPress={requestVerification}
-            >
-              <Text style={s.verifyCtaText}>
-                {t(lang, 'contact_to_verify')}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
 
       {/* Language */}
       <View style={s.section}>

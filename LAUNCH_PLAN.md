@@ -65,7 +65,7 @@ question in this project (see "Update protocol" at the bottom).
 ### Week 2 — Finish v1 scope + prep Play assets (Jun 9–15)
 - [x] "Mark plot as sold" feature (DONUM_DOCS §7 item 3 — flip status, keep
       price history) — done 2026-06-12
-- [ ] Polished empty states: no plots / no favorites / no internet (§7 item 13)
+- [x] Polished empty states: no plots / no favorites / no internet (§7 item 13) — done 2026-06-12
 - [ ] Collect tester feedback, fix the top issues
 - [ ] Align app display name to **Donum** (cosmetic: `app.json`)
 - [ ] Prepare Play listing assets:
