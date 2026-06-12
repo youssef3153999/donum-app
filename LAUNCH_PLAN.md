@@ -67,12 +67,12 @@ question in this project (see "Update protocol" at the bottom).
       price history) — done 2026-06-12
 - [x] Polished empty states: no plots / no favorites / no internet (§7 item 13) — done 2026-06-12
 - [ ] Collect tester feedback, fix the top issues
-- [ ] Align app display name to **Donum** (cosmetic: `app.json`)
+- [x] Align app display name to **Donum** — already set in `strings.xml` ✅
 - [ ] Prepare Play listing assets:
-  - [ ] App icon (512×512)
-  - [ ] Feature graphic (1024×500)
-  - [ ] 2–8 phone screenshots
-  - [ ] Short + full description (Arabic + English)
+  - [x] App icon (512×512) — generated, in outputs folder
+  - [x] Feature graphic (1024×500) — generated, in outputs folder
+  - [ ] 2–8 phone screenshots — capture from device/emulator
+  - [x] Short + full description (Arabic + English + German) — PLAY_STORE_LISTING.md
 
 ### Week 3 — Play submission + hardening (Jun 16–22)
 - [ ] Build release **AAB** (`.\gradlew bundleRelease`) for Play
