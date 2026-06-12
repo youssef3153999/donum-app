@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { fetchMyPlots, deletePlot, markAsSold, type Plot } from '@/data/plots';
+import EmptyState from '@/components/EmptyState';
 import { fmtArea, formatPrice, geodesicArea } from '@/lib/geometry';
 import { colors, radii, spacing } from '@/lib/theme';
 import { t, type Lang } from '@/lib/i18n';
@@ -83,9 +84,11 @@ export default function MyPlotsScreen({ lang }: { lang: Lang }) {
 
   if (plots.length === 0) {
     return (
-      <View style={s.center}>
-        <Text style={s.empty}>{t(lang, 'no_plots_yet')}</Text>
-      </View>
+      <EmptyState
+        icon="pin"
+        title={t(lang, 'no_plots_yet')}
+        subtitle={t(lang, 'no_plots_yet_hint')}
+      />
     );
   }
 
