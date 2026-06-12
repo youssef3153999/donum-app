@@ -106,6 +106,8 @@ const ar: Dict = {
   status_rejected: 'مرفوض',
   status_sold: 'مباع',
   status_hidden: 'مخفي',
+  mark_as_sold: 'تحديد كمباع',
+  mark_sold_confirm: 'هل تأكد أن هذه الأرض بيعت؟ سيُخفى الإعلان من الخريطة.',
 
   no_plots: 'لا توجد أراضٍ مطابقة',
   no_plots_yet: 'لم تنشر أرضاً بعد',
@@ -308,6 +310,8 @@ const en: Dict = {
   status_rejected: 'Rejected',
   status_sold: 'Sold',
   status_hidden: 'Hidden',
+  mark_as_sold: 'Mark as Sold',
+  mark_sold_confirm: 'Are you sure this plot was sold? It will be removed from the map.',
 
   no_plots: 'No matching plots',
   no_plots_yet: 'No listings yet',
@@ -510,6 +514,8 @@ const de: Dict = {
   status_rejected: 'Abgelehnt',
   status_sold: 'Verkauft',
   status_hidden: 'Versteckt',
+  mark_as_sold: 'Als verkauft markieren',
+  mark_sold_confirm: 'Wurde dieses Grundstück verkauft? Es wird von der Karte entfernt.',
 
   no_plots: 'Keine passenden Grundstücke',
   no_plots_yet: 'Noch keine Inserate',

@@ -2,7 +2,7 @@
 
 > **Goal:** Launch the Donum app by **end of June 2026 (target: 2026-06-30)**.
 > **Today:** 2026-06-03
-> **Last updated:** 2026-06-03
+> **Last updated:** 2026-06-12
 > **Owner:** Youssef Al Ali
 
 This file is the **single source of truth for the launch**. It works alongside
@@ -63,8 +63,8 @@ question in this project (see "Update protocol" at the bottom).
       `/terms`) — required for Play and good practice for the APK too
 
 ### Week 2 — Finish v1 scope + prep Play assets (Jun 9–15)
-- [ ] "Mark plot as sold" feature (DONUM_DOCS §7 item 3 — flip status, keep
-      price history)
+- [x] "Mark plot as sold" feature (DONUM_DOCS §7 item 3 — flip status, keep
+      price history) — done 2026-06-12
 - [ ] Polished empty states: no plots / no favorites / no internet (§7 item 13)
 - [ ] Collect tester feedback, fix the top issues
 - [ ] Align app display name to **Donum** (cosmetic: `app.json`)

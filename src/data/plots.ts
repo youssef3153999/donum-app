@@ -281,6 +281,23 @@ export async function deletePlot(id: string): Promise<boolean> {
   return !error;
 }
 
+/**
+ * Flip a plot's status to 'sold'. Does NOT reset to 'pending' — this is an
+ * intentional owner action, not a content change. Sold plots are excluded from
+ * the active map feed but their price data stays in the DB for market stats.
+ */
+export async function markAsSold(id: string): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase
+    .from('plots')
+    .update({ status: 'sold' })
+    .eq('id', id);
+  if (error) {
+    console.warn('markAsSold failed:', error.message);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
 // Fields the owner can change. Coords/area can't be edited because they're
 // drawn on the map -- to redraw, the user should delete and recreate.
 export type UpdatePlotPayload = {

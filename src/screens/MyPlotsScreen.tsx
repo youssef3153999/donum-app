@@ -9,7 +9,7 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { fetchMyPlots, deletePlot, type Plot } from '@/data/plots';
+import { fetchMyPlots, deletePlot, markAsSold, type Plot } from '@/data/plots';
 import { fmtArea, formatPrice, geodesicArea } from '@/lib/geometry';
 import { colors, radii, spacing } from '@/lib/theme';
 import { t, type Lang } from '@/lib/i18n';
@@ -52,6 +52,25 @@ export default function MyPlotsScreen({ lang }: { lang: Lang }) {
   const onEdited = () => {
     setEditing(null);
     load();
+  };
+
+  const onMarkSold = (id: string) => {
+    Alert.alert(t(lang, 'mark_as_sold'), t(lang, 'mark_sold_confirm'), [
+      { text: t(lang, 'cancel'), style: 'cancel' },
+      {
+        text: t(lang, 'mark_as_sold'),
+        onPress: async () => {
+          const { ok } = await markAsSold(id);
+          if (ok) {
+            setPlots(prev =>
+              (prev ?? []).map(p =>
+                p.id === id ? { ...p, status: 'sold' } : p,
+              ),
+            );
+          }
+        },
+      },
+    ]);
   };
 
   if (plots === null) {
@@ -126,6 +145,11 @@ export default function MyPlotsScreen({ lang }: { lang: Lang }) {
                   >
                     <Text style={s.editText}>✎ {t(lang, 'edit_plot')}</Text>
                   </TouchableOpacity>
+                  {item.status === 'active' && (
+                    <TouchableOpacity onPress={() => onMarkSold(item.id)}>
+                      <Text style={s.soldText}>{t(lang, 'mark_as_sold')}</Text>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity onPress={() => onDelete(item.id)}>
                     <Text style={s.danger}>{t(lang, 'delete')}</Text>
                   </TouchableOpacity>
@@ -220,4 +244,5 @@ const s = StyleSheet.create({
   },
   editText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   danger: { color: colors.danger, fontSize: 12 },
+  soldText: { color: '#9AA59E', fontSize: 12 },
 });
